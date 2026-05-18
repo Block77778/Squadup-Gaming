@@ -154,59 +154,57 @@ function createAudioEngine() {
     };
   }
 
-  // ── FIRE: crackling burn sound that starts after explosion ──
+  // ── FIRE: soft relaxing bonfire crackle ──
   function playFire() {
     const now = ctx.currentTime;
-    const FIRE_DURATION = 8.0;
+    const FIRE_DURATION = 10.0;
 
-    // Layer 1: Low rumbling base — the steady combustion roar
+    // Low warm rumble — gentle combustion breath
     const baseLen = Math.floor(ctx.sampleRate * FIRE_DURATION);
     const baseBuf = ctx.createBuffer(1, baseLen, ctx.sampleRate);
     const baseData = baseBuf.getChannelData(0);
     for (let i = 0; i < baseLen; i++) baseData[i] = Math.random() * 2 - 1;
     const baseSrc = ctx.createBufferSource(); baseSrc.buffer = baseBuf;
-    const baseLp = ctx.createBiquadFilter(); baseLp.type = 'lowpass'; baseLp.frequency.value = 220;
-    const basePeak = ctx.createBiquadFilter(); basePeak.type = 'peaking'; basePeak.frequency.value = 80; basePeak.gain.value = 10;
+    const baseLp = ctx.createBiquadFilter(); baseLp.type = 'lowpass'; baseLp.frequency.value = 160;
     const baseGain = ctx.createGain();
-    baseSrc.connect(baseLp); baseLp.connect(basePeak); basePeak.connect(baseGain); baseGain.connect(masterComp);
+    baseSrc.connect(baseLp); baseLp.connect(baseGain); baseGain.connect(masterComp);
     baseGain.gain.setValueAtTime(0, now);
-    baseGain.gain.linearRampToValueAtTime(0.55, now + 0.8);
-    baseGain.gain.setValueAtTime(0.55, now + FIRE_DURATION - 2.5);
+    baseGain.gain.linearRampToValueAtTime(0.18, now + 2.0);
+    baseGain.gain.setValueAtTime(0.18, now + FIRE_DURATION - 3.0);
     baseGain.gain.exponentialRampToValueAtTime(0.001, now + FIRE_DURATION);
     baseSrc.start(now);
 
-    // Layer 2: Mid crackle — the snapping and popping of burning material
+    // Gentle crackle pops — sparse, quiet, like a campfire
     const crackLen = Math.floor(ctx.sampleRate * FIRE_DURATION);
     const crackBuf = ctx.createBuffer(1, crackLen, ctx.sampleRate);
     const crackData = crackBuf.getChannelData(0);
     for (let i = 0; i < crackLen; i++) {
-      // Sparse random pops — silence most of the time, occasional sharp burst
-      crackData[i] = Math.random() < 0.015 ? (Math.random() * 2 - 1) * 4 : 0;
+      crackData[i] = Math.random() < 0.006 ? (Math.random() * 2 - 1) * 2.5 : 0;
     }
     const crackSrc = ctx.createBufferSource(); crackSrc.buffer = crackBuf;
-    const crackBp = ctx.createBiquadFilter(); crackBp.type = 'bandpass'; crackBp.frequency.value = 1200; crackBp.Q.value = 0.8;
+    const crackBp = ctx.createBiquadFilter(); crackBp.type = 'bandpass'; crackBp.frequency.value = 900; crackBp.Q.value = 1.2;
     const crackGain = ctx.createGain();
     crackSrc.connect(crackBp); crackBp.connect(crackGain); crackGain.connect(masterComp);
     crackGain.gain.setValueAtTime(0, now);
-    crackGain.gain.linearRampToValueAtTime(0.7, now + 1.2);
-    crackGain.gain.setValueAtTime(0.7, now + FIRE_DURATION - 2.0);
+    crackGain.gain.linearRampToValueAtTime(0.22, now + 1.5);
+    crackGain.gain.setValueAtTime(0.22, now + FIRE_DURATION - 2.5);
     crackGain.gain.exponentialRampToValueAtTime(0.001, now + FIRE_DURATION);
     crackSrc.start(now);
 
-    // Layer 3: High whoosh — flickering flame breath
-    const whooshLen = Math.floor(ctx.sampleRate * FIRE_DURATION);
-    const whooshBuf = ctx.createBuffer(1, whooshLen, ctx.sampleRate);
-    const whooshData = whooshBuf.getChannelData(0);
-    for (let i = 0; i < whooshLen; i++) whooshData[i] = Math.random() * 2 - 1;
-    const whooshSrc = ctx.createBufferSource(); whooshSrc.buffer = whooshBuf;
-    const whooshHp = ctx.createBiquadFilter(); whooshHp.type = 'bandpass'; whooshHp.frequency.value = 2800; whooshHp.Q.value = 0.4;
-    const whooshGain = ctx.createGain();
-    whooshSrc.connect(whooshHp); whooshHp.connect(whooshGain); whooshGain.connect(masterComp);
-    whooshGain.gain.setValueAtTime(0, now);
-    whooshGain.gain.linearRampToValueAtTime(0.18, now + 1.5);
-    whooshGain.gain.setValueAtTime(0.18, now + FIRE_DURATION - 3.0);
-    whooshGain.gain.exponentialRampToValueAtTime(0.001, now + FIRE_DURATION);
-    whooshSrc.start(now);
+    // Airy high hiss — barely audible flame breath
+    const hissLen = Math.floor(ctx.sampleRate * FIRE_DURATION);
+    const hissBuf = ctx.createBuffer(1, hissLen, ctx.sampleRate);
+    const hissData = hissBuf.getChannelData(0);
+    for (let i = 0; i < hissLen; i++) hissData[i] = Math.random() * 2 - 1;
+    const hissSrc = ctx.createBufferSource(); hissSrc.buffer = hissBuf;
+    const hissHp = ctx.createBiquadFilter(); hissHp.type = 'bandpass'; hissHp.frequency.value = 3500; hissHp.Q.value = 0.3;
+    const hissGain = ctx.createGain();
+    hissSrc.connect(hissHp); hissHp.connect(hissGain); hissGain.connect(masterComp);
+    hissGain.gain.setValueAtTime(0, now);
+    hissGain.gain.linearRampToValueAtTime(0.06, now + 2.5);
+    hissGain.gain.setValueAtTime(0.06, now + FIRE_DURATION - 3.5);
+    hissGain.gain.exponentialRampToValueAtTime(0.001, now + FIRE_DURATION);
+    hissSrc.start(now);
   }
 
   return { playTick, playExplosion, playFire, startAmbient };
@@ -221,6 +219,8 @@ export function Countdown() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioRef = useRef<ReturnType<typeof createAudioEngine> | null>(null);
   const stopAmbientRef = useRef<(() => void) | null>(null);
+  const fireCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const fireAnimRef = useRef<number | null>(null);
 
   const isUrgent = count !== null && count <= 3;
 
@@ -365,170 +365,190 @@ export function Countdown() {
     requestAnimationFrame(draw);
   };
 
-  // ── FIRE VISUAL: persistent flame tongues + smoke + embers after explosion ──
+  // ── FIRE VISUAL: hardcore COD-style fire rendered on internal canvas ref ──
   const triggerFire = () => {
-    const canvas = document.createElement('canvas');
-    canvas.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;z-index:9998;pointer-events:none;';
-    document.body.appendChild(canvas);
-    const W = canvas.width = window.innerWidth;
-    const H = canvas.height = window.innerHeight;
-    const ctx2d = canvas.getContext('2d')!;
-    const cx = W / 2;
-    const DURATION = 8000;
+    const canvas = fireCanvasRef.current;
+    if (!canvas) return;
+    const W = canvas.width = canvas.offsetWidth;
+    const H = canvas.height = canvas.offsetHeight;
+    const ctx2d = canvas.getContext('2d');
+    if (!ctx2d) return;
+
+    const DURATION = 10000;
     const start = performance.now();
 
-    // Fire particles — spawn from bottom-center, rise upward
-    interface FireParticle {
+    interface Particle {
       x: number; y: number; vx: number; vy: number;
       size: number; life: number; maxLife: number;
       type: 'flame' | 'ember' | 'smoke';
-      hue: number;
+      hue: number; wobble: number; wobbleSpeed: number;
     }
 
-    const particles: FireParticle[] = [];
+    const particles: Particle[] = [];
 
-    function spawnParticles(elapsed: number) {
-      const intensity = Math.max(0, 1 - elapsed / DURATION);
-      const count = Math.floor(intensity * 8) + 2;
+    // Pre-seed dense initial burst — fire is visible immediately
+    for (let i = 0; i < 140; i++) {
+      const spread = 280;
+      const t_off = Math.random();
+      particles.push({
+        x: W * 0.5 + (Math.random() - 0.5) * spread,
+        y: H - t_off * 320,
+        vx: (Math.random() - 0.5) * 2.8,
+        vy: -(Math.random() * 7 + 4),
+        size: Math.random() * 65 + 22,
+        life: t_off * 700, maxLife: Math.random() * 900 + 500,
+        type: 'flame', hue: Math.random() * 35,
+        wobble: Math.random() * Math.PI * 2,
+        wobbleSpeed: Math.random() * 0.1 + 0.03,
+      });
+    }
+    for (let i = 0; i < 70; i++) {
+      particles.push({
+        x: W * 0.5 + (Math.random() - 0.5) * 320,
+        y: H - Math.random() * 280,
+        vx: (Math.random() - 0.5) * 4,
+        vy: -(Math.random() * 5 + 2),
+        size: Math.random() * 4 + 1.5,
+        life: Math.random() * 500, maxLife: Math.random() * 2200 + 800,
+        type: 'ember', hue: Math.random() * 40,
+        wobble: 0, wobbleSpeed: 0,
+      });
+    }
+
+    function spawnBatch(elapsed: number) {
+      const fadeOut = Math.max(0, 1 - elapsed / DURATION);
+      const count = Math.floor(fadeOut * 14) + 4;
+      const spread = 240 * fadeOut + 90;
+
       for (let i = 0; i < count; i++) {
-        const spread = 180 * intensity + 60;
-        const x = cx + (Math.random() - 0.5) * spread;
-        const baseY = H * 0.72;
-
-        // Flame tongue
-        if (Math.random() < 0.6) {
-          particles.push({
-            x, y: baseY,
-            vx: (Math.random() - 0.5) * 1.8,
-            vy: -(Math.random() * 5 + 3) * intensity - 1.5,
-            size: Math.random() * 28 + 10,
-            life: 0, maxLife: Math.random() * 900 + 400,
-            type: 'flame',
-            hue: Math.random() * 40, // 0-40 = red-orange range
-          });
-        }
-        // Ember
-        if (Math.random() < 0.25) {
-          particles.push({
-            x, y: baseY - Math.random() * 60,
-            vx: (Math.random() - 0.5) * 3,
-            vy: -(Math.random() * 4 + 2),
-            size: Math.random() * 3 + 1,
-            life: 0, maxLife: Math.random() * 1800 + 600,
-            type: 'ember',
-            hue: Math.random() * 50,
-          });
-        }
-        // Smoke
-        if (Math.random() < 0.15) {
-          particles.push({
-            x: cx + (Math.random() - 0.5) * spread * 0.6,
-            y: baseY - 60 - Math.random() * 40,
-            vx: (Math.random() - 0.5) * 0.8,
-            vy: -(Math.random() * 1.5 + 0.5),
-            size: Math.random() * 60 + 30,
-            life: 0, maxLife: Math.random() * 2500 + 1000,
-            type: 'smoke',
-            hue: 0,
-          });
-        }
+        particles.push({
+          x: W * 0.5 + (Math.random() - 0.5) * spread,
+          y: H,
+          vx: (Math.random() - 0.5) * 2.8,
+          vy: -(Math.random() * 8 + 4),
+          size: Math.random() * 68 + 20,
+          life: 0, maxLife: Math.random() * 850 + 450,
+          type: 'flame', hue: Math.random() * 35,
+          wobble: Math.random() * Math.PI * 2,
+          wobbleSpeed: Math.random() * 0.1 + 0.03,
+        });
+      }
+      for (let i = 0; i < Math.ceil(count * 0.45); i++) {
+        particles.push({
+          x: W * 0.5 + (Math.random() - 0.5) * spread,
+          y: H - Math.random() * 90,
+          vx: (Math.random() - 0.5) * 4.5,
+          vy: -(Math.random() * 4.5 + 1.5),
+          size: Math.random() * 4.5 + 1,
+          life: 0, maxLife: Math.random() * 2800 + 1000,
+          type: 'ember', hue: Math.random() * 40,
+          wobble: 0, wobbleSpeed: 0,
+        });
+      }
+      if (Math.random() < 0.2) {
+        particles.push({
+          x: W * 0.5 + (Math.random() - 0.5) * spread * 0.5,
+          y: H - 90 - Math.random() * 70,
+          vx: (Math.random() - 0.5) * 0.7,
+          vy: -(Math.random() * 1.2 + 0.4),
+          size: Math.random() * 90 + 45,
+          life: 0, maxLife: Math.random() * 4000 + 1500,
+          type: 'smoke', hue: 0, wobble: 0, wobbleSpeed: 0,
+        });
       }
     }
 
-    let lastTime = start;
+    let lastT = start;
 
     function draw(now: number) {
       const elapsed = now - start;
-      const t = elapsed / DURATION;
-      const dt = now - lastTime;
-      lastTime = now;
+      const globalT = elapsed / DURATION;
+      const dt = Math.min(now - lastT, 50);
+      lastT = now;
 
-      if (t > 1) {
-        document.body.removeChild(canvas);
+      if (globalT > 1.05) {
+        ctx2d.clearRect(0, 0, W, H);
         return;
       }
 
       ctx2d.clearRect(0, 0, W, H);
 
-      // Spawn new particles
-      spawnParticles(elapsed);
+      const intensity = Math.max(0, 1 - globalT);
 
-      // Ground fire glow — ambient orange light pool at base
-      const intensity = Math.max(0, 1 - t);
-      const glowRadius = (180 + intensity * 120);
-      const glow = ctx2d.createRadialGradient(cx, H * 0.72, 0, cx, H * 0.72, glowRadius);
-      glow.addColorStop(0, `rgba(255,120,0,${(intensity * 0.35).toFixed(3)})`);
-      glow.addColorStop(0.5, `rgba(255,60,0,${(intensity * 0.15).toFixed(3)})`);
-      glow.addColorStop(1, 'rgba(0,0,0,0)');
+      // Ground fire glow — wide orange bloom rising from bottom
+      const glowW = 300 + intensity * 200;
+      const glow = ctx2d.createRadialGradient(W / 2, H, 0, W / 2, H - 150, glowW);
+      glow.addColorStop(0,    `rgba(255,140,0,${(intensity * 0.6).toFixed(3)})`);
+      glow.addColorStop(0.3,  `rgba(255,60,0,${(intensity * 0.4).toFixed(3)})`);
+      glow.addColorStop(0.65, `rgba(180,20,0,${(intensity * 0.15).toFixed(3)})`);
+      glow.addColorStop(1,    'rgba(0,0,0,0)');
       ctx2d.fillStyle = glow;
       ctx2d.fillRect(0, 0, W, H);
 
-      // Update and draw particles
+      spawnBatch(elapsed);
+
+      // Render order: smoke → flame → ember
+      const sorted = particles.slice().sort((a, b) => {
+        const o = { smoke: 0, flame: 1, ember: 2 } as const;
+        return o[a.type] - o[b.type];
+      });
+
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
         p.life += dt;
         if (p.life >= p.maxLife) { particles.splice(i, 1); continue; }
 
-        const lt = p.life / p.maxLife; // 0=birth, 1=death
-        p.x += p.vx * (dt / 16);
-        p.y += p.vy * (dt / 16);
-        // Turbulence
-        p.vx += (Math.random() - 0.5) * 0.3;
-        p.vy -= 0.05; // buoyancy
+        const lt = p.life / p.maxLife;
+        const dtS = dt / 16;
+        p.wobble += p.wobbleSpeed;
+        p.x += (p.vx + Math.sin(p.wobble) * 1.0) * dtS;
+        p.y += p.vy * dtS;
+        p.vy += 0.045 * dtS;
 
         if (p.type === 'flame') {
-          // Flame: grows then shrinks, orange-yellow core
-          const sizeFactor = lt < 0.3 ? lt / 0.3 : 1 - (lt - 0.3) / 0.7;
-          const size = p.size * sizeFactor;
-          const alpha = lt < 0.15 ? lt / 0.15 : Math.pow(1 - lt, 1.3);
-          const grad = ctx2d.createRadialGradient(p.x, p.y, 0, p.x, p.y, size);
-          const lightness = 70 + (1 - lt) * 20;
-          grad.addColorStop(0,   `hsla(${60 - p.hue * 0.3}, 100%, ${lightness}%, ${alpha.toFixed(3)})`);
-          grad.addColorStop(0.3, `hsla(${30 - p.hue}, 100%, 60%, ${(alpha * 0.85).toFixed(3)})`);
-          grad.addColorStop(0.7, `hsla(${p.hue}, 100%, 40%, ${(alpha * 0.5).toFixed(3)})`);
-          grad.addColorStop(1,   `hsla(${p.hue}, 80%, 20%, 0)`);
+          const grow = lt < 0.2 ? lt / 0.2 : 1;
+          const shrink = lt > 0.3 ? 1 - (lt - 0.3) / 0.7 : 1;
+          const s = p.size * grow * shrink;
+          const alpha = (lt < 0.1 ? lt / 0.1 : Math.pow(1 - lt, 1.05)) * (intensity * 0.85 + 0.12);
+          const grad = ctx2d.createRadialGradient(p.x, p.y + s * 0.15, s * 0.05, p.x, p.y, s);
+          grad.addColorStop(0,    `hsla(58,100%,98%,${Math.min(1, alpha * 1.3).toFixed(3)})`);
+          grad.addColorStop(0.12, `hsla(48,100%,85%,${alpha.toFixed(3)})`);
+          grad.addColorStop(0.38, `hsla(${28 - p.hue},100%,58%,${alpha.toFixed(3)})`);
+          grad.addColorStop(0.68, `hsla(${10 + p.hue},100%,36%,${(alpha * 0.72).toFixed(3)})`);
+          grad.addColorStop(1,    'hsla(0,70%,12%,0)');
           ctx2d.fillStyle = grad;
           ctx2d.beginPath();
-          ctx2d.ellipse(p.x, p.y, size * 0.55, size, 0, 0, Math.PI * 2);
+          ctx2d.ellipse(p.x, p.y, s * 0.4, s, Math.sin(p.wobble * 0.4) * 0.2, 0, Math.PI * 2);
           ctx2d.fill();
 
         } else if (p.type === 'ember') {
-          // Ember: bright hot dot, fades as it rises and cools
-          const alpha = Math.pow(1 - lt, 1.8) * (intensity * 0.6 + 0.4);
-          const size = p.size * (1 - lt * 0.4);
-          ctx2d.globalAlpha = alpha;
-          ctx2d.fillStyle = `hsl(${40 - p.hue * lt}, 100%, ${80 - lt * 40}%)`;
-          ctx2d.beginPath();
-          ctx2d.arc(p.x, p.y, size, 0, Math.PI * 2);
-          ctx2d.fill();
-          // Glow halo
-          const eGlow = ctx2d.createRadialGradient(p.x, p.y, 0, p.x, p.y, size * 3);
-          eGlow.addColorStop(0, `rgba(255,160,0,${(alpha * 0.4).toFixed(3)})`);
-          eGlow.addColorStop(1, 'rgba(0,0,0,0)');
-          ctx2d.fillStyle = eGlow;
-          ctx2d.beginPath();
-          ctx2d.arc(p.x, p.y, size * 3, 0, Math.PI * 2);
-          ctx2d.fill();
+          const alpha = Math.pow(1 - lt, 1.5) * Math.min(1, intensity + 0.35);
+          const s = p.size * (1 - lt * 0.4);
+          const eg = ctx2d.createRadialGradient(p.x, p.y, 0, p.x, p.y, s * 6);
+          eg.addColorStop(0, `rgba(255,200,0,${(alpha * 0.5).toFixed(3)})`);
+          eg.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx2d.fillStyle = eg;
+          ctx2d.beginPath(); ctx2d.arc(p.x, p.y, s * 6, 0, Math.PI * 2); ctx2d.fill();
+          ctx2d.globalAlpha = Math.min(1, alpha);
+          ctx2d.fillStyle = `hsl(${38 - p.hue * lt * 1.5},100%,${88 - lt * 48}%)`;
+          ctx2d.beginPath(); ctx2d.arc(p.x, p.y, s, 0, Math.PI * 2); ctx2d.fill();
           ctx2d.globalAlpha = 1;
 
         } else {
-          // Smoke: grey expanding ring, drifts upward
-          const alpha = lt < 0.1 ? (lt / 0.1) * 0.12 : Math.pow(1 - lt, 2) * 0.12;
-          const size = p.size * (1 + lt * 1.8);
-          const grey = Math.floor(30 + lt * 50);
+          const alpha = (lt < 0.08 ? lt / 0.08 : Math.pow(1 - lt, 2.2)) * 0.16;
+          const s = p.size * (1 + lt * 2.4);
+          const grey = Math.floor(18 + lt * 60);
           ctx2d.globalAlpha = alpha;
           ctx2d.fillStyle = `rgb(${grey},${grey},${grey})`;
-          ctx2d.beginPath();
-          ctx2d.arc(p.x, p.y, size, 0, Math.PI * 2);
-          ctx2d.fill();
+          ctx2d.beginPath(); ctx2d.arc(p.x, p.y, s, 0, Math.PI * 2); ctx2d.fill();
           ctx2d.globalAlpha = 1;
         }
       }
 
-      requestAnimationFrame(draw);
+      fireAnimRef.current = requestAnimationFrame(draw);
     }
 
-    requestAnimationFrame(draw);
+    fireAnimRef.current = requestAnimationFrame(draw);
   };
 
   // Clean cinematic animation per phase — no bouncing, no breathing during hold
@@ -609,6 +629,13 @@ export function Countdown() {
           animation: 'blastFlash 0.8s ease-out forwards',
         }} />
       )}
+
+      {/* Fire canvas — always mounted so ref is available, drawn on after explosion */}
+      <canvas
+        ref={fireCanvasRef}
+        className="absolute inset-0 pointer-events-none"
+        style={{ width: '100%', height: '100%', zIndex: 30 }}
+      />
 
       {/* Deep space background */}
       <div className="absolute inset-0" style={{
