@@ -5,138 +5,86 @@ import confetti from 'canvas-confetti';
 
 type Phase = 'entering' | 'holding' | 'exiting';
 
-// ── SOUND ENGINE (Web Audio API — no external files needed) ──
+// ── SOUND ENGINE ──
 function createAudioEngine() {
-  const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+  const ctx = new AudioCtx();
+  ctx.resume();
 
-  // Deep cinematic tick — like a film countdown
   function playTick(urgent = false) {
-    if (ctx.state !== 'running') { ctx.resume(); }
+    const now = ctx.currentTime;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    const dist = ctx.createWaveShaper();
-
-    // Distortion curve for grit
-    const curve = new Float32Array(256);
-    for (let i = 0; i < 256; i++) {
-      const x = (i * 2) / 256 - 1;
-      curve[i] = (Math.PI + 400) * x / (Math.PI + 400 * Math.abs(x));
-    }
-    dist.curve = curve;
-
-    osc.connect(dist);
-    dist.connect(gain);
-    gain.connect(ctx.destination);
-
-    const now = ctx.currentTime;
+    osc.connect(gain); gain.connect(ctx.destination);
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(urgent ? 180 : 120, now);
     osc.frequency.exponentialRampToValueAtTime(urgent ? 60 : 40, now + 0.15);
-
     gain.gain.setValueAtTime(urgent ? 1.2 : 0.9, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+    osc.start(now); osc.stop(now + 0.25);
 
-    osc.start(now);
-    osc.stop(now + 0.2);
-
-    // Add a high metallic click on top
     const click = ctx.createOscillator();
-    const clickGain = ctx.createGain();
-    click.connect(clickGain);
-    clickGain.connect(ctx.destination);
+    const cg = ctx.createGain();
+    click.connect(cg); cg.connect(ctx.destination);
     click.type = 'square';
     click.frequency.setValueAtTime(urgent ? 1800 : 1200, now);
     click.frequency.exponentialRampToValueAtTime(200, now + 0.05);
-    clickGain.gain.setValueAtTime(urgent ? 0.9 : 0.6, now);
-    clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
-    click.start(now);
-    click.stop(now + 0.07);
+    cg.gain.setValueAtTime(urgent ? 0.9 : 0.6, now);
+    cg.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+    click.start(now); click.stop(now + 0.08);
   }
 
-  // Massive explosion boom for reveal
   function playExplosion() {
-    if (ctx.state !== 'running') { ctx.resume(); }
-    // Sub boom
+    const now = ctx.currentTime;
     for (let i = 0; i < 3; i++) {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      const now = ctx.currentTime + i * 0.08;
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(80 - i * 15, now);
-      osc.frequency.exponentialRampToValueAtTime(20, now + 1.5);
-      gain.gain.setValueAtTime(1.5, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
-      osc.start(now);
-      osc.stop(now + 2);
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      const t = now + i * 0.08;
+      o.type = 'sine';
+      o.frequency.setValueAtTime(80 - i * 15, t);
+      o.frequency.exponentialRampToValueAtTime(20, t + 1.5);
+      g.gain.setValueAtTime(1.5, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 1.8);
+      o.start(t); o.stop(t + 2);
     }
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 1.5, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const ns = ctx.createBufferSource(); ns.buffer = buf;
+    const nf = ctx.createBiquadFilter(); nf.type = 'lowpass'; nf.frequency.value = 800;
+    const ng = ctx.createGain();
+    ns.connect(nf); nf.connect(ng); ng.connect(ctx.destination);
+    ng.gain.setValueAtTime(1.2, now);
+    ng.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
+    ns.start(now);
 
-    // White noise burst
-    const bufferSize = ctx.sampleRate * 1.5;
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-    const noise = ctx.createBufferSource();
-    noise.buffer = buffer;
-    const noiseFilter = ctx.createBiquadFilter();
-    noiseFilter.type = 'lowpass';
-    noiseFilter.frequency.value = 800;
-    const noiseGain = ctx.createGain();
-    noise.connect(noiseFilter);
-    noiseFilter.connect(noiseGain);
-    noiseGain.connect(ctx.destination);
-    noiseGain.gain.setValueAtTime(1.2, ctx.currentTime);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.5);
-    noise.start(ctx.currentTime);
-
-    // High shimmer
-    const shimmer = ctx.createOscillator();
-    const shimmerGain = ctx.createGain();
-    shimmer.connect(shimmerGain);
-    shimmerGain.connect(ctx.destination);
-    shimmer.type = 'sine';
-    shimmer.frequency.setValueAtTime(3000, ctx.currentTime);
-    shimmer.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.8);
-    shimmerGain.gain.setValueAtTime(0.3, ctx.currentTime);
-    shimmerGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.9);
-    shimmer.start(ctx.currentTime);
-    shimmer.stop(ctx.currentTime + 1);
+    const sh = ctx.createOscillator(); const sg = ctx.createGain();
+    sh.connect(sg); sg.connect(ctx.destination);
+    sh.type = 'sine';
+    sh.frequency.setValueAtTime(3000, now);
+    sh.frequency.exponentialRampToValueAtTime(800, now + 0.8);
+    sg.gain.setValueAtTime(0.4, now);
+    sg.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+    sh.start(now); sh.stop(now + 1);
   }
 
-  // Ambient drone — dark cinematic atmosphere
   function startAmbient() {
-    const drone1 = ctx.createOscillator();
-    const drone2 = ctx.createOscillator();
-    const masterGain = ctx.createGain();
-    const filter = ctx.createBiquadFilter();
-
-    drone1.connect(filter);
-    drone2.connect(filter);
-    filter.connect(masterGain);
-    masterGain.connect(ctx.destination);
-
-    drone1.type = 'sine';
-    drone1.frequency.value = 55;
-    drone2.type = 'sine';
-    drone2.frequency.value = 57.5; // slight detune for tension
-
-    filter.type = 'lowpass';
-    filter.frequency.value = 300;
-
-    masterGain.gain.setValueAtTime(0, ctx.currentTime);
-    masterGain.gain.linearRampToValueAtTime(0.25, ctx.currentTime + 2);
-
-    drone1.start();
-    drone2.start();
-
+    const d1 = ctx.createOscillator(); const d2 = ctx.createOscillator();
+    const mg = ctx.createGain(); const f = ctx.createBiquadFilter();
+    d1.connect(f); d2.connect(f); f.connect(mg); mg.connect(ctx.destination);
+    d1.type = 'sine'; d1.frequency.value = 55;
+    d2.type = 'sine'; d2.frequency.value = 57.5;
+    f.type = 'lowpass'; f.frequency.value = 300;
+    mg.gain.setValueAtTime(0, ctx.currentTime);
+    mg.gain.linearRampToValueAtTime(0.25, ctx.currentTime + 2);
+    d1.start(); d2.start();
     return () => {
-      masterGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1);
-      setTimeout(() => { drone1.stop(); drone2.stop(); }, 1100);
+      mg.gain.linearRampToValueAtTime(0, ctx.currentTime + 1);
+      setTimeout(() => { try { d1.stop(); d2.stop(); } catch(e) {} }, 1100);
     };
   }
 
-  return { playTick, playExplosion, startAmbient, ctx };
+  return { playTick, playExplosion, startAmbient };
 }
 
 export function Countdown() {
@@ -156,13 +104,9 @@ export function Countdown() {
   const EXIT_MS  = 200;
 
   function handleStart() {
-    // Must create AudioContext synchronously inside click handler
     const engine = createAudioEngine();
-    engine.ctx.resume().then(() => {
-      audioRef.current = engine;
-      stopAmbientRef.current = engine.startAmbient();
-    });
     audioRef.current = engine;
+    stopAmbientRef.current = engine.startAmbient();
     setStarted(true);
     setCount(10);
     setPhase('entering');
