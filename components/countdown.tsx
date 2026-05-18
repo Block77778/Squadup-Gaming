@@ -3,39 +3,177 @@
 import { useEffect, useState, useRef } from 'react';
 import confetti from 'canvas-confetti';
 
-// Each number cycles through: entering → hold → exiting
 type Phase = 'entering' | 'holding' | 'exiting';
+
+// ── SOUND ENGINE (Web Audio API — no external files needed) ──
+function createAudioEngine() {
+  const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+
+  // Deep cinematic tick — like a film countdown
+  function playTick(urgent = false) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const dist = ctx.createWaveShaper();
+
+    // Distortion curve for grit
+    const curve = new Float32Array(256);
+    for (let i = 0; i < 256; i++) {
+      const x = (i * 2) / 256 - 1;
+      curve[i] = (Math.PI + 400) * x / (Math.PI + 400 * Math.abs(x));
+    }
+    dist.curve = curve;
+
+    osc.connect(dist);
+    dist.connect(gain);
+    gain.connect(ctx.destination);
+
+    const now = ctx.currentTime;
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(urgent ? 180 : 120, now);
+    osc.frequency.exponentialRampToValueAtTime(urgent ? 60 : 40, now + 0.15);
+
+    gain.gain.setValueAtTime(urgent ? 0.6 : 0.35, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+    osc.start(now);
+    osc.stop(now + 0.2);
+
+    // Add a high metallic click on top
+    const click = ctx.createOscillator();
+    const clickGain = ctx.createGain();
+    click.connect(clickGain);
+    clickGain.connect(ctx.destination);
+    click.type = 'square';
+    click.frequency.setValueAtTime(urgent ? 1800 : 1200, now);
+    click.frequency.exponentialRampToValueAtTime(200, now + 0.05);
+    clickGain.gain.setValueAtTime(urgent ? 0.4 : 0.2, now);
+    clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+    click.start(now);
+    click.stop(now + 0.07);
+  }
+
+  // Massive explosion boom for reveal
+  function playExplosion() {
+    // Sub boom
+    for (let i = 0; i < 3; i++) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      const now = ctx.currentTime + i * 0.08;
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(80 - i * 15, now);
+      osc.frequency.exponentialRampToValueAtTime(20, now + 1.5);
+      gain.gain.setValueAtTime(0.8, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
+      osc.start(now);
+      osc.stop(now + 2);
+    }
+
+    // White noise burst
+    const bufferSize = ctx.sampleRate * 1.5;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = 'lowpass';
+    noiseFilter.frequency.value = 800;
+    const noiseGain = ctx.createGain();
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+    noiseGain.gain.setValueAtTime(0.6, ctx.currentTime);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.5);
+    noise.start(ctx.currentTime);
+
+    // High shimmer
+    const shimmer = ctx.createOscillator();
+    const shimmerGain = ctx.createGain();
+    shimmer.connect(shimmerGain);
+    shimmerGain.connect(ctx.destination);
+    shimmer.type = 'sine';
+    shimmer.frequency.setValueAtTime(3000, ctx.currentTime);
+    shimmer.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.8);
+    shimmerGain.gain.setValueAtTime(0.3, ctx.currentTime);
+    shimmerGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.9);
+    shimmer.start(ctx.currentTime);
+    shimmer.stop(ctx.currentTime + 1);
+  }
+
+  // Ambient drone — dark cinematic atmosphere
+  function startAmbient() {
+    const drone1 = ctx.createOscillator();
+    const drone2 = ctx.createOscillator();
+    const masterGain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+
+    drone1.connect(filter);
+    drone2.connect(filter);
+    filter.connect(masterGain);
+    masterGain.connect(ctx.destination);
+
+    drone1.type = 'sine';
+    drone1.frequency.value = 55;
+    drone2.type = 'sine';
+    drone2.frequency.value = 57.5; // slight detune for tension
+
+    filter.type = 'lowpass';
+    filter.frequency.value = 300;
+
+    masterGain.gain.setValueAtTime(0, ctx.currentTime);
+    masterGain.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 2);
+
+    drone1.start();
+    drone2.start();
+
+    return () => {
+      masterGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1);
+      setTimeout(() => { drone1.stop(); drone2.stop(); }, 1100);
+    };
+  }
+
+  return { playTick, playExplosion, startAmbient, ctx };
+}
 
 export function Countdown() {
   const [count, setCount] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>('entering');
   const [revealed, setRevealed] = useState(false);
   const [flash, setFlash] = useState(false);
+  const [started, setStarted] = useState(false); // gate — user must click first
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const audioRef = useRef<ReturnType<typeof createAudioEngine> | null>(null);
+  const stopAmbientRef = useRef<(() => void) | null>(null);
 
   const isUrgent = count !== null && count <= 3;
 
-  // Durations (ms) — tight cinematic pacing
   const ENTER_MS = 300;
   const HOLD_MS  = 500;
   const EXIT_MS  = 200;
 
-  useEffect(() => {
-    // Kick off at 10
+  function handleStart() {
+    setStarted(true);
+    audioRef.current = createAudioEngine();
+    stopAmbientRef.current = audioRef.current.startAmbient();
     setCount(10);
     setPhase('entering');
-  }, []);
+  }
 
   useEffect(() => {
-    if (count === null) return;
+    if (!started || count === null) return;
 
     if (phase === 'entering') {
+      // Play tick sound on every new number
+      audioRef.current?.playTick(isUrgent);
       timerRef.current = setTimeout(() => setPhase('holding'), ENTER_MS);
     } else if (phase === 'holding') {
       if (count <= 0) {
-        // End of countdown
         setFlash(true);
         setTimeout(() => {
+          audioRef.current?.playExplosion();
+          stopAmbientRef.current?.();
           triggerExplosion();
           setRevealed(true);
           setFlash(false);
@@ -51,7 +189,7 @@ export function Countdown() {
     }
 
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [count, phase]);
+  }, [count, phase, started]);
 
   const triggerExplosion = () => {
     const defaults = {
@@ -86,6 +224,62 @@ export function Countdown() {
 
   return (
     <div className="relative w-full h-screen bg-black flex flex-col items-center justify-center overflow-hidden">
+
+      {/* ── CLICK TO BEGIN GATE ── */}
+      {!started && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center"
+          style={{ background: 'radial-gradient(ellipse at center, rgba(20,10,0,0.95) 0%, #000 100%)' }}>
+          <div style={{
+            color: '#4a3810',
+            letterSpacing: '0.55em',
+            fontSize: '0.7rem',
+            fontWeight: '700',
+            textTransform: 'uppercase',
+            marginBottom: '3rem',
+            fontFamily: 'Georgia, serif',
+          }}>◆ SQUAD UP GAMING ◆</div>
+
+          <button
+            onClick={handleStart}
+            style={{
+              background: 'none',
+              border: '2px solid rgba(218,165,32,0.4)',
+              color: '#ffd700',
+              fontSize: '0.8rem',
+              fontWeight: '700',
+              letterSpacing: '0.4em',
+              textTransform: 'uppercase',
+              fontFamily: 'Georgia, serif',
+              padding: '1.2rem 3rem',
+              cursor: 'pointer',
+              position: 'relative',
+              transition: 'all 0.3s ease',
+              boxShadow: '0 0 30px rgba(218,165,32,0.1)',
+            }}
+            onMouseEnter={e => {
+              (e.target as HTMLElement).style.borderColor = 'rgba(218,165,32,0.9)';
+              (e.target as HTMLElement).style.boxShadow = '0 0 40px rgba(218,165,32,0.4)';
+              (e.target as HTMLElement).style.color = '#fff8dc';
+            }}
+            onMouseLeave={e => {
+              (e.target as HTMLElement).style.borderColor = 'rgba(218,165,32,0.4)';
+              (e.target as HTMLElement).style.boxShadow = '0 0 30px rgba(218,165,32,0.1)';
+              (e.target as HTMLElement).style.color = '#ffd700';
+            }}
+          >
+            ENTER
+          </button>
+
+          <p style={{
+            color: '#2a1e08',
+            fontSize: '0.6rem',
+            letterSpacing: '0.3em',
+            textTransform: 'uppercase',
+            fontFamily: 'Georgia, serif',
+            marginTop: '1.5rem',
+          }}>SOUND ON FOR BEST EXPERIENCE</p>
+        </div>
+      )}
 
       {/* Flash overlay */}
       {flash && (
