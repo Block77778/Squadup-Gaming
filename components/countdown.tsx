@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import confetti from 'canvas-confetti';
+
 
 type Phase = 'entering' | 'holding' | 'exiting';
 
@@ -66,75 +66,76 @@ function createAudioEngine() {
     }
   }
 
-  // ── SOFT GAMING EXPLOSION: layered sub-boom + noise rumble + sparkle ──
+  // ── COD/BATTLEFIELD-STYLE HARD EXPLOSION ──
   function playExplosion() {
     const now = ctx.currentTime;
 
-    // Layer 1: Sub-bass whump — deep pitched drop (the "boom" core)
+    // Layer 1: Massive sub-bass punch — the shockwave hitting your chest
     const subOsc = ctx.createOscillator(); const subGain = ctx.createGain();
     subOsc.connect(subGain); subGain.connect(masterComp);
     subOsc.type = 'sine';
-    subOsc.frequency.setValueAtTime(130, now);
-    subOsc.frequency.exponentialRampToValueAtTime(28, now + 0.45);
-    subGain.gain.setValueAtTime(1.8, now);
-    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
-    subOsc.start(now); subOsc.stop(now + 0.6);
+    subOsc.frequency.setValueAtTime(60, now);
+    subOsc.frequency.exponentialRampToValueAtTime(18, now + 0.8);
+    subGain.gain.setValueAtTime(3.5, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
+    subOsc.start(now); subOsc.stop(now + 1.05);
 
-    // Layer 2: Warm mid crunch — soft-clipped sawtooth for thickness
-    const midOsc = ctx.createOscillator(); const midGain = ctx.createGain();
-    const midFilter = ctx.createBiquadFilter();
-    midFilter.type = 'lowpass'; midFilter.frequency.value = 500;
-    midOsc.connect(midFilter); midFilter.connect(midGain); midGain.connect(masterComp);
-    midOsc.type = 'sawtooth';
-    midOsc.frequency.setValueAtTime(75, now);
-    midOsc.frequency.exponentialRampToValueAtTime(22, now + 0.65);
-    midGain.gain.setValueAtTime(0.45, now);
-    midGain.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
-    midOsc.start(now); midOsc.stop(now + 0.8);
+    // Layer 2: Sharp impact transient — the initial detonation crack
+    const impactBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.04), ctx.sampleRate);
+    const impactData = impactBuf.getChannelData(0);
+    for (let i = 0; i < impactData.length; i++) {
+      impactData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / impactData.length, 0.3);
+    }
+    const impactSrc = ctx.createBufferSource(); impactSrc.buffer = impactBuf;
+    const impactFilter = ctx.createBiquadFilter(); impactFilter.type = 'lowpass'; impactFilter.frequency.value = 3000;
+    const impactGain = ctx.createGain();
+    impactSrc.connect(impactFilter); impactFilter.connect(impactGain); impactGain.connect(masterComp);
+    impactGain.gain.setValueAtTime(4.0, now);
+    impactGain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+    impactSrc.start(now);
 
-    // Layer 3: Noise rumble — the rolling dust-cloud tail
-    const rumbleLen = Math.floor(ctx.sampleRate * 2.0);
+    // Layer 3: Heavy rumble tail — the rolling concussion wave
+    const rumbleLen = Math.floor(ctx.sampleRate * 3.5);
     const rumbleBuf = ctx.createBuffer(1, rumbleLen, ctx.sampleRate);
     const rumbleData = rumbleBuf.getChannelData(0);
     for (let i = 0; i < rumbleLen; i++) rumbleData[i] = Math.random() * 2 - 1;
     const rumbleSrc = ctx.createBufferSource(); rumbleSrc.buffer = rumbleBuf;
-    const rumbleLp = ctx.createBiquadFilter(); rumbleLp.type = 'lowpass'; rumbleLp.frequency.value = 500;
-    const rumblePeak = ctx.createBiquadFilter(); rumblePeak.type = 'peaking'; rumblePeak.frequency.value = 180; rumblePeak.gain.value = 9;
+    const rumbleLp = ctx.createBiquadFilter(); rumbleLp.type = 'lowpass'; rumbleLp.frequency.value = 350;
+    const rumblePeak = ctx.createBiquadFilter(); rumblePeak.type = 'peaking'; rumblePeak.frequency.value = 120; rumblePeak.gain.value = 14;
     const rumbleGain = ctx.createGain();
     rumbleSrc.connect(rumbleLp); rumbleLp.connect(rumblePeak); rumblePeak.connect(rumbleGain); rumbleGain.connect(masterComp);
-    rumbleGain.gain.setValueAtTime(0.0, now);
-    rumbleGain.gain.linearRampToValueAtTime(0.8, now + 0.04); // fast attack swell
-    rumbleGain.gain.exponentialRampToValueAtTime(0.001, now + 2.0);
+    rumbleGain.gain.setValueAtTime(0, now);
+    rumbleGain.gain.linearRampToValueAtTime(2.2, now + 0.02);
+    rumbleGain.gain.setValueAtTime(2.2, now + 0.1);
+    rumbleGain.gain.exponentialRampToValueAtTime(0.001, now + 3.5);
     rumbleSrc.start(now);
 
-    // Layer 4: High crackle — sparkly debris entering slightly after the boom
-    const crackleLen = Math.floor(ctx.sampleRate * 1.0);
-    const crackleBuf = ctx.createBuffer(1, crackleLen, ctx.sampleRate);
-    const crackleData = crackleBuf.getChannelData(0);
-    for (let i = 0; i < crackleLen; i++) {
-      crackleData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / crackleLen, 0.45);
+    // Layer 4: Mid-range debris crunch — shrapnel and structural collapse
+    const debrisLen = Math.floor(ctx.sampleRate * 1.5);
+    const debrisBuf = ctx.createBuffer(1, debrisLen, ctx.sampleRate);
+    const debrisData = debrisBuf.getChannelData(0);
+    for (let i = 0; i < debrisLen; i++) {
+      debrisData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / debrisLen, 0.7);
     }
-    const crackleSrc = ctx.createBufferSource(); crackleSrc.buffer = crackleBuf;
-    const crackleHp = ctx.createBiquadFilter(); crackleHp.type = 'highpass'; crackleHp.frequency.value = 4500;
-    const crackleGain = ctx.createGain();
-    crackleSrc.connect(crackleHp); crackleHp.connect(crackleGain); crackleGain.connect(masterComp);
-    crackleGain.gain.setValueAtTime(0.0, now + 0.06);
-    crackleGain.gain.linearRampToValueAtTime(0.3, now + 0.12);
-    crackleGain.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
-    crackleSrc.start(now + 0.06);
+    const debrisSrc = ctx.createBufferSource(); debrisSrc.buffer = debrisBuf;
+    const debrisBp = ctx.createBiquadFilter(); debrisBp.type = 'bandpass'; debrisBp.frequency.value = 800; debrisBp.Q.value = 0.5;
+    const debrisGain = ctx.createGain();
+    debrisSrc.connect(debrisBp); debrisBp.connect(debrisGain); debrisGain.connect(masterComp);
+    debrisGain.gain.setValueAtTime(0, now + 0.02);
+    debrisGain.gain.linearRampToValueAtTime(1.4, now + 0.05);
+    debrisGain.gain.exponentialRampToValueAtTime(0.001, now + 1.6);
+    debrisSrc.start(now + 0.02);
 
-    // Layer 5: Victory sting — ascending minor chord arpeggio (game reward feel)
-    [330, 392, 523].forEach((freq, i) => { // E4, G4, C5
-      const t = now + 0.08 + i * 0.075;
-      const s = ctx.createOscillator(); const sg = ctx.createGain();
-      s.connect(sg); sg.connect(masterComp);
-      s.type = 'triangle';
-      s.frequency.setValueAtTime(freq, t);
-      sg.gain.setValueAtTime(0, t);
-      sg.gain.linearRampToValueAtTime(0.22, t + 0.015);
-      sg.gain.exponentialRampToValueAtTime(0.001, t + 0.65);
-      s.start(t); s.stop(t + 0.7);
-    });
+    // Layer 5: High-freq pressure ring — that ear-ringing shockwave hiss
+    const ringOsc = ctx.createOscillator(); const ringGain = ctx.createGain();
+    ringOsc.connect(ringGain); ringGain.connect(masterComp);
+    ringOsc.type = 'sine';
+    ringOsc.frequency.setValueAtTime(3800, now + 0.05);
+    ringOsc.frequency.exponentialRampToValueAtTime(1200, now + 2.5);
+    ringGain.gain.setValueAtTime(0, now + 0.05);
+    ringGain.gain.linearRampToValueAtTime(0.18, now + 0.1);
+    ringGain.gain.exponentialRampToValueAtTime(0.001, now + 2.8);
+    ringOsc.start(now + 0.05); ringOsc.stop(now + 3.0);
   }
 
   function startAmbient() {
@@ -215,22 +216,93 @@ export function Countdown() {
   }, [count, phase, started]);
 
   const triggerExplosion = () => {
-    const defaults = {
-      spread: 360, ticks: 200, gravity: 0.4, decay: 0.90, startVelocity: 80,
-      colors: ['#ffd700', '#ffed4e', '#daa520', '#c0c0c0', '#ffd700', '#fff8dc', '#b8860b'],
-    };
-    confetti({ ...defaults, particleCount: 300, origin: { x: 0.5, y: 0.5 } });
-    setTimeout(() => {
-      confetti({ ...defaults, particleCount: 150, origin: { x: 0.1, y: 0.3 } });
-      confetti({ ...defaults, particleCount: 150, origin: { x: 0.9, y: 0.3 } });
-    }, 150);
-    setTimeout(() => {
-      confetti({ ...defaults, particleCount: 150, origin: { x: 0.2, y: 0.8 } });
-      confetti({ ...defaults, particleCount: 150, origin: { x: 0.8, y: 0.8 } });
-    }, 300);
-    setTimeout(() => {
-      confetti({ ...defaults, particleCount: 200, origin: { x: 0.5, y: 0.2 } });
-    }, 500);
+    const canvas = document.createElement('canvas');
+    canvas.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;z-index:9999;pointer-events:none;';
+    document.body.appendChild(canvas);
+    const W = canvas.width = window.innerWidth;
+    const H = canvas.height = window.innerHeight;
+    const ctx2d = canvas.getContext('2d')!;
+    const cx = W / 2, cy = H / 2;
+    const start = performance.now();
+    const DURATION = 3000;
+
+    // Embers
+    const embers = Array.from({ length: 220 }, () => {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = Math.random() * 18 + 4;
+      const size = Math.random() * 4 + 1;
+      const life = Math.random() * 0.5 + 0.5;
+      const colors = ['#ff4400','#ff6600','#ff8800','#ffaa00','#ffcc00','#ffffff','#ff2200'];
+      return { x: cx, y: cy, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - Math.random() * 6, size, life, color: colors[Math.floor(Math.random() * colors.length)], gravity: Math.random() * 0.3 + 0.1 };
+    });
+
+    // Shockwave rings
+    const rings = [
+      { delay: 0,   color: 'rgba(255,200,80,', maxR: Math.max(W, H) * 0.85, thickness: 18 },
+      { delay: 80,  color: 'rgba(255,120,30,', maxR: Math.max(W, H) * 0.65, thickness: 10 },
+      { delay: 160, color: 'rgba(255,255,255,', maxR: Math.max(W, H) * 0.45, thickness: 6  },
+    ];
+
+    function draw(now: number) {
+      const elapsed = now - start;
+      const t = elapsed / DURATION;
+      if (t > 1) { document.body.removeChild(canvas); return; }
+
+      ctx2d.clearRect(0, 0, W, H);
+
+      // Shockwave rings
+      rings.forEach(ring => {
+        const rt = Math.max(0, (elapsed - ring.delay) / (DURATION * 0.55));
+        if (rt <= 0 || rt > 1) return;
+        const r = rt * ring.maxR;
+        const alpha = Math.pow(1 - rt, 1.8);
+        const width = ring.thickness * (1 - rt * 0.7);
+        ctx2d.beginPath();
+        ctx2d.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx2d.strokeStyle = `${ring.color}${alpha.toFixed(3)})`;
+        ctx2d.lineWidth = width;
+        ctx2d.stroke();
+      });
+
+      // Central fireball glow
+      if (t < 0.45) {
+        const ft = t / 0.45;
+        const alpha = Math.pow(1 - ft, 1.2);
+        const radius = (1 - Math.pow(ft, 0.4)) * 320 + 40;
+        const grad = ctx2d.createRadialGradient(cx, cy, 0, cx, cy, radius);
+        grad.addColorStop(0, `rgba(255,255,220,${(alpha * 0.95).toFixed(3)})`);
+        grad.addColorStop(0.2, `rgba(255,180,20,${(alpha * 0.85).toFixed(3)})`);
+        grad.addColorStop(0.55, `rgba(255,60,0,${(alpha * 0.5).toFixed(3)})`);
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx2d.fillStyle = grad;
+        ctx2d.beginPath();
+        ctx2d.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx2d.fill();
+      }
+
+      // Embers
+      const dt = 16;
+      embers.forEach(e => {
+        if (t > e.life) return;
+        const et = t / e.life;
+        e.x += e.vx * (dt / 1000) * (1 - et * 0.6) * 60;
+        e.y += (e.vy + e.gravity * elapsed / 16) * (dt / 1000) * 60;
+        const alpha = Math.pow(1 - et, 1.5);
+        const s = e.size * (1 - et * 0.5);
+        ctx2d.beginPath();
+        ctx2d.arc(e.x, e.y, s, 0, Math.PI * 2);
+        ctx2d.fillStyle = e.color.replace(')', `,${alpha.toFixed(2)})`).replace('rgb', 'rgba');
+        // fallback: just set globalAlpha
+        ctx2d.globalAlpha = alpha;
+        ctx2d.fillStyle = e.color;
+        ctx2d.fill();
+        ctx2d.globalAlpha = 1;
+      });
+
+      requestAnimationFrame(draw);
+    }
+
+    requestAnimationFrame(draw);
   };
 
   // Clean cinematic animation per phase — no bouncing, no breathing during hold
@@ -246,7 +318,7 @@ export function Countdown() {
   })();
 
   return (
-    <div className="relative w-full h-screen bg-black flex flex-col items-center justify-center overflow-hidden">
+    <div className="relative w-full h-screen bg-black flex flex-col items-center justify-center overflow-hidden" style={flash ? { animation: 'screenShake 0.5s ease-out forwards' } : {}}>
 
       {/* ── CLICK TO BEGIN GATE ── */}
       {!started && (
@@ -304,11 +376,11 @@ export function Countdown() {
         </div>
       )}
 
-      {/* Flash overlay */}
+      {/* Hard blast flash — white-out then orange burn */}
       {flash && (
         <div className="absolute inset-0 z-50 pointer-events-none" style={{
-          background: 'radial-gradient(circle, rgba(255,215,0,0.6) 0%, rgba(218,165,32,0.2) 50%, transparent 100%)',
-          animation: 'flashPulse 0.6s ease-out forwards',
+          background: 'radial-gradient(circle at center, rgba(255,255,255,1) 0%, rgba(255,160,0,0.9) 30%, rgba(255,60,0,0.5) 60%, transparent 100%)',
+          animation: 'blastFlash 0.8s ease-out forwards',
         }} />
       )}
 
@@ -672,9 +744,21 @@ export function Countdown() {
           0%, 100% { opacity: 0.8; }
           50% { opacity: 1; }
         }
-        @keyframes flashPulse {
-          0% { opacity: 1; }
+        @keyframes blastFlash {
+          0%   { opacity: 1; }
+          8%   { opacity: 1; }
+          35%  { opacity: 0.6; }
           100% { opacity: 0; }
+        }
+        @keyframes screenShake {
+          0%   { transform: translate(0,0) rotate(0deg); }
+          10%  { transform: translate(-8px, -6px) rotate(-0.5deg); }
+          20%  { transform: translate(8px, 6px) rotate(0.5deg); }
+          30%  { transform: translate(-6px, 4px) rotate(-0.3deg); }
+          40%  { transform: translate(6px, -4px) rotate(0.3deg); }
+          50%  { transform: translate(-3px, 2px) rotate(-0.2deg); }
+          60%  { transform: translate(3px, -2px) rotate(0.1deg); }
+          100% { transform: translate(0,0) rotate(0deg); }
         }
 
         /* ── CINEMATIC NUMBER TRANSITIONS ── */
