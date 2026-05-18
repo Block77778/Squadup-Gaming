@@ -20,109 +20,120 @@ function createAudioEngine() {
   masterComp.release.value = 0.1;
   masterComp.connect(ctx.destination);
 
+  // ── TICKER: crisp mechanical tick-tock sound ──
   function playTick(urgent = false) {
     const now = ctx.currentTime;
 
-    // ── Pitched "blip" tone — rises slightly like a game beep ──
-    const baseFreq = urgent ? 880 : 660;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(masterComp);
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(baseFreq, now);
-    osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.15, now + 0.04);
-    gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(urgent ? 0.7 : 0.5, now + 0.005);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + (urgent ? 0.12 : 0.18));
-    osc.start(now); osc.stop(now + 0.22);
-
-    // ── Soft transient click for percussive attack ──
-    const clickBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.012), ctx.sampleRate);
-    const clickData = clickBuf.getChannelData(0);
-    for (let i = 0; i < clickData.length; i++) {
-      const env = 1 - i / clickData.length;
-      clickData[i] = (Math.random() * 2 - 1) * env * env;
+    // Sharp noise snap — the "tick" transient (8ms)
+    const tickLen = Math.floor(ctx.sampleRate * 0.008);
+    const tickBuf = ctx.createBuffer(1, tickLen, ctx.sampleRate);
+    const tickData = tickBuf.getChannelData(0);
+    for (let i = 0; i < tickLen; i++) {
+      tickData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / tickLen, 3);
     }
-    const clickSrc = ctx.createBufferSource(); clickSrc.buffer = clickBuf;
-    const clickFilter = ctx.createBiquadFilter();
-    clickFilter.type = 'bandpass'; clickFilter.frequency.value = urgent ? 3200 : 2400; clickFilter.Q.value = 0.8;
-    const clickGain = ctx.createGain();
-    clickSrc.connect(clickFilter); clickFilter.connect(clickGain); clickGain.connect(masterComp);
-    clickGain.gain.setValueAtTime(urgent ? 0.6 : 0.35, now);
-    clickSrc.start(now);
+    const tickSrc = ctx.createBufferSource(); tickSrc.buffer = tickBuf;
+    const tickBp = ctx.createBiquadFilter();
+    tickBp.type = 'bandpass'; tickBp.frequency.value = urgent ? 2800 : 1800; tickBp.Q.value = 2.5;
+    const tickGain = ctx.createGain();
+    tickSrc.connect(tickBp); tickBp.connect(tickGain); tickGain.connect(masterComp);
+    tickGain.gain.setValueAtTime(urgent ? 1.1 : 0.75, now);
+    tickSrc.start(now);
 
-    // ── Urgency shimmer: high harmonic ring on last 3 counts ──
+    // Resonant "tock" — short pitched thud giving the mechanical body
+    const tockOsc = ctx.createOscillator(); const tockGain = ctx.createGain();
+    tockOsc.connect(tockGain); tockGain.connect(masterComp);
+    tockOsc.type = 'sine';
+    tockOsc.frequency.setValueAtTime(urgent ? 320 : 220, now);
+    tockOsc.frequency.exponentialRampToValueAtTime(urgent ? 180 : 110, now + 0.04);
+    tockGain.gain.setValueAtTime(urgent ? 0.5 : 0.28, now);
+    tockGain.gain.exponentialRampToValueAtTime(0.001, now + 0.055);
+    tockOsc.start(now); tockOsc.stop(now + 0.06);
+
+    // Urgent double-tick on last 3 counts — rapid second snap 30ms later
     if (urgent) {
-      const ring = ctx.createOscillator(); const rg = ctx.createGain();
-      ring.connect(rg); rg.connect(masterComp);
-      ring.type = 'triangle';
-      ring.frequency.setValueAtTime(baseFreq * 3, now);
-      rg.gain.setValueAtTime(0.18, now);
-      rg.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
-      ring.start(now); ring.stop(now + 0.1);
+      const t2 = now + 0.032;
+      const r2Buf = ctx.createBuffer(1, tickLen, ctx.sampleRate);
+      const r2Data = r2Buf.getChannelData(0);
+      for (let i = 0; i < tickLen; i++) {
+        r2Data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / tickLen, 3);
+      }
+      const r2Src = ctx.createBufferSource(); r2Src.buffer = r2Buf;
+      const r2Bp = ctx.createBiquadFilter(); r2Bp.type = 'bandpass'; r2Bp.frequency.value = 3400; r2Bp.Q.value = 2;
+      const r2Gain = ctx.createGain();
+      r2Src.connect(r2Bp); r2Bp.connect(r2Gain); r2Gain.connect(masterComp);
+      r2Gain.gain.setValueAtTime(0.45, t2);
+      r2Src.start(t2);
     }
   }
 
+  // ── SOFT GAMING EXPLOSION: layered sub-boom + noise rumble + sparkle ──
   function playExplosion() {
     const now = ctx.currentTime;
 
-    // ── PARTY POPPER: sharp cork-pop thump ──
-    // Low-end pressure burst — the "boom" body
-    const popBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.06), ctx.sampleRate);
-    const popData = popBuf.getChannelData(0);
-    for (let i = 0; i < popData.length; i++) {
-      const env = Math.pow(1 - i / popData.length, 1.5);
-      popData[i] = (Math.random() * 2 - 1) * env;
+    // Layer 1: Sub-bass whump — deep pitched drop (the "boom" core)
+    const subOsc = ctx.createOscillator(); const subGain = ctx.createGain();
+    subOsc.connect(subGain); subGain.connect(masterComp);
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(130, now);
+    subOsc.frequency.exponentialRampToValueAtTime(28, now + 0.45);
+    subGain.gain.setValueAtTime(1.8, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+    subOsc.start(now); subOsc.stop(now + 0.6);
+
+    // Layer 2: Warm mid crunch — soft-clipped sawtooth for thickness
+    const midOsc = ctx.createOscillator(); const midGain = ctx.createGain();
+    const midFilter = ctx.createBiquadFilter();
+    midFilter.type = 'lowpass'; midFilter.frequency.value = 500;
+    midOsc.connect(midFilter); midFilter.connect(midGain); midGain.connect(masterComp);
+    midOsc.type = 'sawtooth';
+    midOsc.frequency.setValueAtTime(75, now);
+    midOsc.frequency.exponentialRampToValueAtTime(22, now + 0.65);
+    midGain.gain.setValueAtTime(0.45, now);
+    midGain.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
+    midOsc.start(now); midOsc.stop(now + 0.8);
+
+    // Layer 3: Noise rumble — the rolling dust-cloud tail
+    const rumbleLen = Math.floor(ctx.sampleRate * 2.0);
+    const rumbleBuf = ctx.createBuffer(1, rumbleLen, ctx.sampleRate);
+    const rumbleData = rumbleBuf.getChannelData(0);
+    for (let i = 0; i < rumbleLen; i++) rumbleData[i] = Math.random() * 2 - 1;
+    const rumbleSrc = ctx.createBufferSource(); rumbleSrc.buffer = rumbleBuf;
+    const rumbleLp = ctx.createBiquadFilter(); rumbleLp.type = 'lowpass'; rumbleLp.frequency.value = 500;
+    const rumblePeak = ctx.createBiquadFilter(); rumblePeak.type = 'peaking'; rumblePeak.frequency.value = 180; rumblePeak.gain.value = 9;
+    const rumbleGain = ctx.createGain();
+    rumbleSrc.connect(rumbleLp); rumbleLp.connect(rumblePeak); rumblePeak.connect(rumbleGain); rumbleGain.connect(masterComp);
+    rumbleGain.gain.setValueAtTime(0.0, now);
+    rumbleGain.gain.linearRampToValueAtTime(0.8, now + 0.04); // fast attack swell
+    rumbleGain.gain.exponentialRampToValueAtTime(0.001, now + 2.0);
+    rumbleSrc.start(now);
+
+    // Layer 4: High crackle — sparkly debris entering slightly after the boom
+    const crackleLen = Math.floor(ctx.sampleRate * 1.0);
+    const crackleBuf = ctx.createBuffer(1, crackleLen, ctx.sampleRate);
+    const crackleData = crackleBuf.getChannelData(0);
+    for (let i = 0; i < crackleLen; i++) {
+      crackleData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / crackleLen, 0.45);
     }
-    const popSrc = ctx.createBufferSource(); popSrc.buffer = popBuf;
-    const popFilter = ctx.createBiquadFilter();
-    popFilter.type = 'lowpass'; popFilter.frequency.value = 280; popFilter.Q.value = 2.5;
-    const popGain = ctx.createGain();
-    popSrc.connect(popFilter); popFilter.connect(popGain); popGain.connect(masterComp);
-    popGain.gain.setValueAtTime(2.8, now);
-    popGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-    popSrc.start(now);
+    const crackleSrc = ctx.createBufferSource(); crackleSrc.buffer = crackleBuf;
+    const crackleHp = ctx.createBiquadFilter(); crackleHp.type = 'highpass'; crackleHp.frequency.value = 4500;
+    const crackleGain = ctx.createGain();
+    crackleSrc.connect(crackleHp); crackleHp.connect(crackleGain); crackleGain.connect(masterComp);
+    crackleGain.gain.setValueAtTime(0.0, now + 0.06);
+    crackleGain.gain.linearRampToValueAtTime(0.3, now + 0.12);
+    crackleGain.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
+    crackleSrc.start(now + 0.06);
 
-    // ── Pitched "pop" tone: quick pitch drop like a cork ──
-    const corkOsc = ctx.createOscillator(); const corkGain = ctx.createGain();
-    corkOsc.connect(corkGain); corkGain.connect(masterComp);
-    corkOsc.type = 'sine';
-    corkOsc.frequency.setValueAtTime(240, now);
-    corkOsc.frequency.exponentialRampToValueAtTime(60, now + 0.12);
-    corkGain.gain.setValueAtTime(1.8, now);
-    corkGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-    corkOsc.start(now); corkOsc.stop(now + 0.18);
-
-    // ── Confetti spray: bright noise burst (the "pshhhh" scatter) ──
-    const sprayBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 1.2), ctx.sampleRate);
-    const sprayData = sprayBuf.getChannelData(0);
-    for (let i = 0; i < sprayData.length; i++) {
-      const env = Math.pow(1 - i / sprayData.length, 0.6);
-      sprayData[i] = (Math.random() * 2 - 1) * env;
-    }
-    const spraySrc = ctx.createBufferSource(); spraySrc.buffer = sprayBuf;
-    const sprayHigh = ctx.createBiquadFilter();
-    sprayHigh.type = 'highpass'; sprayHigh.frequency.value = 3500;
-    const sprayMid = ctx.createBiquadFilter();
-    sprayMid.type = 'peaking'; sprayMid.frequency.value = 6000; sprayMid.gain.value = 8;
-    const sprayGain = ctx.createGain();
-    spraySrc.connect(sprayHigh); sprayHigh.connect(sprayMid); sprayMid.connect(sprayGain); sprayGain.connect(masterComp);
-    sprayGain.gain.setValueAtTime(0.55, now + 0.03);
-    sprayGain.gain.exponentialRampToValueAtTime(0.001, now + 1.1);
-    spraySrc.start(now + 0.03);
-
-    // ── Celebratory "ta-daaa" ping: bright upward shimmer ──
-    const pingFreqs = [1047, 1319, 1568]; // C6, E6, G6
-    pingFreqs.forEach((freq, i) => {
-      const t = now + 0.05 + i * 0.06;
-      const p = ctx.createOscillator(); const pg = ctx.createGain();
-      p.connect(pg); pg.connect(masterComp);
-      p.type = 'sine';
-      p.frequency.setValueAtTime(freq, t);
-      pg.gain.setValueAtTime(0, t);
-      pg.gain.linearRampToValueAtTime(0.35, t + 0.01);
-      pg.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-      p.start(t); p.stop(t + 0.55);
+    // Layer 5: Victory sting — ascending minor chord arpeggio (game reward feel)
+    [330, 392, 523].forEach((freq, i) => { // E4, G4, C5
+      const t = now + 0.08 + i * 0.075;
+      const s = ctx.createOscillator(); const sg = ctx.createGain();
+      s.connect(sg); sg.connect(masterComp);
+      s.type = 'triangle';
+      s.frequency.setValueAtTime(freq, t);
+      sg.gain.setValueAtTime(0, t);
+      sg.gain.linearRampToValueAtTime(0.22, t + 0.015);
+      sg.gain.exponentialRampToValueAtTime(0.001, t + 0.65);
+      s.start(t); s.stop(t + 0.7);
     });
   }
 
