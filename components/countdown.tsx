@@ -32,7 +32,7 @@ function createAudioEngine() {
     osc.frequency.setValueAtTime(urgent ? 180 : 120, now);
     osc.frequency.exponentialRampToValueAtTime(urgent ? 60 : 40, now + 0.15);
 
-    gain.gain.setValueAtTime(urgent ? 0.6 : 0.35, now);
+    gain.gain.setValueAtTime(urgent ? 1.2 : 0.9, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
 
     osc.start(now);
@@ -46,7 +46,7 @@ function createAudioEngine() {
     click.type = 'square';
     click.frequency.setValueAtTime(urgent ? 1800 : 1200, now);
     click.frequency.exponentialRampToValueAtTime(200, now + 0.05);
-    clickGain.gain.setValueAtTime(urgent ? 0.4 : 0.2, now);
+    clickGain.gain.setValueAtTime(urgent ? 0.9 : 0.6, now);
     clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
     click.start(now);
     click.stop(now + 0.07);
@@ -64,7 +64,7 @@ function createAudioEngine() {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(80 - i * 15, now);
       osc.frequency.exponentialRampToValueAtTime(20, now + 1.5);
-      gain.gain.setValueAtTime(0.8, now);
+      gain.gain.setValueAtTime(1.5, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
       osc.start(now);
       osc.stop(now + 2);
@@ -84,7 +84,7 @@ function createAudioEngine() {
     noise.connect(noiseFilter);
     noiseFilter.connect(noiseGain);
     noiseGain.connect(ctx.destination);
-    noiseGain.gain.setValueAtTime(0.6, ctx.currentTime);
+    noiseGain.gain.setValueAtTime(1.2, ctx.currentTime);
     noiseGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.5);
     noise.start(ctx.currentTime);
 
@@ -123,7 +123,7 @@ function createAudioEngine() {
     filter.frequency.value = 300;
 
     masterGain.gain.setValueAtTime(0, ctx.currentTime);
-    masterGain.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 2);
+    masterGain.gain.linearRampToValueAtTime(0.25, ctx.currentTime + 2);
 
     drone1.start();
     drone2.start();
@@ -153,10 +153,13 @@ export function Countdown() {
   const HOLD_MS  = 500;
   const EXIT_MS  = 200;
 
-  function handleStart() {
+  async function handleStart() {
     setStarted(true);
-    audioRef.current = createAudioEngine();
-    stopAmbientRef.current = audioRef.current.startAmbient();
+    const engine = createAudioEngine();
+    // Resume context — required by browsers after user gesture
+    await engine.ctx.resume();
+    audioRef.current = engine;
+    stopAmbientRef.current = engine.startAmbient();
     setCount(10);
     setPhase('entering');
   }
