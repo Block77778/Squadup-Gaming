@@ -119,9 +119,9 @@ export function Countdown() {
     if (!started || count === null) return;
 
     if (phase === 'entering') {
-      // Play tick sound on every new number
-      audioRef.current?.playTick(isUrgent);
-      timerRef.current = setTimeout(() => setPhase('holding'), ENTER_MS);
+  console.log('playing tick', count, isUrgent, audioRef.current);
+  audioRef.current?.playTick(isUrgent);
+  timerRef.current = setTimeout(() => setPhase('holding'), ENTER_MS);
     } else if (phase === 'holding') {
       if (count <= 0) {
         setFlash(true);
