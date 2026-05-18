@@ -11,67 +11,125 @@ function createAudioEngine() {
   const ctx = new AudioCtx();
   ctx.resume();
 
+  // Helper: create a master compressor to keep everything punchy and clean
+  const masterComp = ctx.createDynamicsCompressor();
+  masterComp.threshold.value = -6;
+  masterComp.knee.value = 3;
+  masterComp.ratio.value = 4;
+  masterComp.attack.value = 0.001;
+  masterComp.release.value = 0.1;
+  masterComp.connect(ctx.destination);
+
   function playTick(urgent = false) {
     const now = ctx.currentTime;
+
+    // ── Pitched "blip" tone — rises slightly like a game beep ──
+    const baseFreq = urgent ? 880 : 660;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(urgent ? 180 : 120, now);
-    osc.frequency.exponentialRampToValueAtTime(urgent ? 60 : 40, now + 0.15);
-    gain.gain.setValueAtTime(urgent ? 1.2 : 0.9, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-    osc.start(now); osc.stop(now + 0.25);
+    osc.connect(gain); gain.connect(masterComp);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(baseFreq, now);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.15, now + 0.04);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(urgent ? 0.7 : 0.5, now + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + (urgent ? 0.12 : 0.18));
+    osc.start(now); osc.stop(now + 0.22);
 
-    const click = ctx.createOscillator();
-    const cg = ctx.createGain();
-    click.connect(cg); cg.connect(ctx.destination);
-    click.type = 'square';
-    click.frequency.setValueAtTime(urgent ? 1800 : 1200, now);
-    click.frequency.exponentialRampToValueAtTime(200, now + 0.05);
-    cg.gain.setValueAtTime(urgent ? 0.9 : 0.6, now);
-    cg.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
-    click.start(now); click.stop(now + 0.08);
+    // ── Soft transient click for percussive attack ──
+    const clickBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.012), ctx.sampleRate);
+    const clickData = clickBuf.getChannelData(0);
+    for (let i = 0; i < clickData.length; i++) {
+      const env = 1 - i / clickData.length;
+      clickData[i] = (Math.random() * 2 - 1) * env * env;
+    }
+    const clickSrc = ctx.createBufferSource(); clickSrc.buffer = clickBuf;
+    const clickFilter = ctx.createBiquadFilter();
+    clickFilter.type = 'bandpass'; clickFilter.frequency.value = urgent ? 3200 : 2400; clickFilter.Q.value = 0.8;
+    const clickGain = ctx.createGain();
+    clickSrc.connect(clickFilter); clickFilter.connect(clickGain); clickGain.connect(masterComp);
+    clickGain.gain.setValueAtTime(urgent ? 0.6 : 0.35, now);
+    clickSrc.start(now);
+
+    // ── Urgency shimmer: high harmonic ring on last 3 counts ──
+    if (urgent) {
+      const ring = ctx.createOscillator(); const rg = ctx.createGain();
+      ring.connect(rg); rg.connect(masterComp);
+      ring.type = 'triangle';
+      ring.frequency.setValueAtTime(baseFreq * 3, now);
+      rg.gain.setValueAtTime(0.18, now);
+      rg.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+      ring.start(now); ring.stop(now + 0.1);
+    }
   }
 
   function playExplosion() {
     const now = ctx.currentTime;
-    for (let i = 0; i < 3; i++) {
-      const o = ctx.createOscillator(); const g = ctx.createGain();
-      o.connect(g); g.connect(ctx.destination);
-      const t = now + i * 0.08;
-      o.type = 'sine';
-      o.frequency.setValueAtTime(80 - i * 15, t);
-      o.frequency.exponentialRampToValueAtTime(20, t + 1.5);
-      g.gain.setValueAtTime(1.5, t);
-      g.gain.exponentialRampToValueAtTime(0.001, t + 1.8);
-      o.start(t); o.stop(t + 2);
-    }
-    const buf = ctx.createBuffer(1, ctx.sampleRate * 1.5, ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-    const ns = ctx.createBufferSource(); ns.buffer = buf;
-    const nf = ctx.createBiquadFilter(); nf.type = 'lowpass'; nf.frequency.value = 800;
-    const ng = ctx.createGain();
-    ns.connect(nf); nf.connect(ng); ng.connect(ctx.destination);
-    ng.gain.setValueAtTime(1.2, now);
-    ng.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
-    ns.start(now);
 
-    const sh = ctx.createOscillator(); const sg = ctx.createGain();
-    sh.connect(sg); sg.connect(ctx.destination);
-    sh.type = 'sine';
-    sh.frequency.setValueAtTime(3000, now);
-    sh.frequency.exponentialRampToValueAtTime(800, now + 0.8);
-    sg.gain.setValueAtTime(0.4, now);
-    sg.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
-    sh.start(now); sh.stop(now + 1);
+    // ── PARTY POPPER: sharp cork-pop thump ──
+    // Low-end pressure burst — the "boom" body
+    const popBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.06), ctx.sampleRate);
+    const popData = popBuf.getChannelData(0);
+    for (let i = 0; i < popData.length; i++) {
+      const env = Math.pow(1 - i / popData.length, 1.5);
+      popData[i] = (Math.random() * 2 - 1) * env;
+    }
+    const popSrc = ctx.createBufferSource(); popSrc.buffer = popBuf;
+    const popFilter = ctx.createBiquadFilter();
+    popFilter.type = 'lowpass'; popFilter.frequency.value = 280; popFilter.Q.value = 2.5;
+    const popGain = ctx.createGain();
+    popSrc.connect(popFilter); popFilter.connect(popGain); popGain.connect(masterComp);
+    popGain.gain.setValueAtTime(2.8, now);
+    popGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+    popSrc.start(now);
+
+    // ── Pitched "pop" tone: quick pitch drop like a cork ──
+    const corkOsc = ctx.createOscillator(); const corkGain = ctx.createGain();
+    corkOsc.connect(corkGain); corkGain.connect(masterComp);
+    corkOsc.type = 'sine';
+    corkOsc.frequency.setValueAtTime(240, now);
+    corkOsc.frequency.exponentialRampToValueAtTime(60, now + 0.12);
+    corkGain.gain.setValueAtTime(1.8, now);
+    corkGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+    corkOsc.start(now); corkOsc.stop(now + 0.18);
+
+    // ── Confetti spray: bright noise burst (the "pshhhh" scatter) ──
+    const sprayBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 1.2), ctx.sampleRate);
+    const sprayData = sprayBuf.getChannelData(0);
+    for (let i = 0; i < sprayData.length; i++) {
+      const env = Math.pow(1 - i / sprayData.length, 0.6);
+      sprayData[i] = (Math.random() * 2 - 1) * env;
+    }
+    const spraySrc = ctx.createBufferSource(); spraySrc.buffer = sprayBuf;
+    const sprayHigh = ctx.createBiquadFilter();
+    sprayHigh.type = 'highpass'; sprayHigh.frequency.value = 3500;
+    const sprayMid = ctx.createBiquadFilter();
+    sprayMid.type = 'peaking'; sprayMid.frequency.value = 6000; sprayMid.gain.value = 8;
+    const sprayGain = ctx.createGain();
+    spraySrc.connect(sprayHigh); sprayHigh.connect(sprayMid); sprayMid.connect(sprayGain); sprayGain.connect(masterComp);
+    sprayGain.gain.setValueAtTime(0.55, now + 0.03);
+    sprayGain.gain.exponentialRampToValueAtTime(0.001, now + 1.1);
+    spraySrc.start(now + 0.03);
+
+    // ── Celebratory "ta-daaa" ping: bright upward shimmer ──
+    const pingFreqs = [1047, 1319, 1568]; // C6, E6, G6
+    pingFreqs.forEach((freq, i) => {
+      const t = now + 0.05 + i * 0.06;
+      const p = ctx.createOscillator(); const pg = ctx.createGain();
+      p.connect(pg); pg.connect(masterComp);
+      p.type = 'sine';
+      p.frequency.setValueAtTime(freq, t);
+      pg.gain.setValueAtTime(0, t);
+      pg.gain.linearRampToValueAtTime(0.35, t + 0.01);
+      pg.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+      p.start(t); p.stop(t + 0.55);
+    });
   }
 
   function startAmbient() {
     const d1 = ctx.createOscillator(); const d2 = ctx.createOscillator();
     const mg = ctx.createGain(); const f = ctx.createBiquadFilter();
-    d1.connect(f); d2.connect(f); f.connect(mg); mg.connect(ctx.destination);
+    d1.connect(f); d2.connect(f); f.connect(mg); mg.connect(masterComp);
     d1.type = 'sine'; d1.frequency.value = 55;
     d2.type = 'sine'; d2.frequency.value = 57.5;
     f.type = 'lowpass'; f.frequency.value = 300;
