@@ -104,13 +104,16 @@ export function Countdown() {
   const EXIT_MS  = 200;
 
   function handleStart() {
-    const engine = createAudioEngine();
-    audioRef.current = engine;
-    stopAmbientRef.current = engine.startAmbient();
-    setStarted(true);
-    setCount(10);
-    setPhase('entering');
-  }
+  console.log('handleStart fired');
+  const engine = createAudioEngine();
+  console.log('engine created', engine);
+  audioRef.current = engine;
+  stopAmbientRef.current = engine.startAmbient();
+  console.log('ambient started');
+  setStarted(true);
+  setCount(10);
+  setPhase('entering');
+}
 
   useEffect(() => {
     if (!started || count === null) return;
