@@ -11,6 +11,7 @@ function createAudioEngine() {
 
   // Deep cinematic tick — like a film countdown
   function playTick(urgent = false) {
+    if (ctx.state !== 'running') { ctx.resume(); }
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     const dist = ctx.createWaveShaper();
@@ -54,6 +55,7 @@ function createAudioEngine() {
 
   // Massive explosion boom for reveal
   function playExplosion() {
+    if (ctx.state !== 'running') { ctx.resume(); }
     // Sub boom
     for (let i = 0; i < 3; i++) {
       const osc = ctx.createOscillator();
@@ -153,13 +155,15 @@ export function Countdown() {
   const HOLD_MS  = 500;
   const EXIT_MS  = 200;
 
-  async function handleStart() {
-    setStarted(true);
+  function handleStart() {
+    // Must create AudioContext synchronously inside click handler
     const engine = createAudioEngine();
-    // Resume context — required by browsers after user gesture
-    await engine.ctx.resume();
+    engine.ctx.resume().then(() => {
+      audioRef.current = engine;
+      stopAmbientRef.current = engine.startAmbient();
+    });
     audioRef.current = engine;
-    stopAmbientRef.current = engine.startAmbient();
+    setStarted(true);
     setCount(10);
     setPhase('entering');
   }
