@@ -154,7 +154,62 @@ function createAudioEngine() {
     };
   }
 
-  return { playTick, playExplosion, startAmbient };
+  // ── FIRE: crackling burn sound that starts after explosion ──
+  function playFire() {
+    const now = ctx.currentTime;
+    const FIRE_DURATION = 8.0;
+
+    // Layer 1: Low rumbling base — the steady combustion roar
+    const baseLen = Math.floor(ctx.sampleRate * FIRE_DURATION);
+    const baseBuf = ctx.createBuffer(1, baseLen, ctx.sampleRate);
+    const baseData = baseBuf.getChannelData(0);
+    for (let i = 0; i < baseLen; i++) baseData[i] = Math.random() * 2 - 1;
+    const baseSrc = ctx.createBufferSource(); baseSrc.buffer = baseBuf;
+    const baseLp = ctx.createBiquadFilter(); baseLp.type = 'lowpass'; baseLp.frequency.value = 220;
+    const basePeak = ctx.createBiquadFilter(); basePeak.type = 'peaking'; basePeak.frequency.value = 80; basePeak.gain.value = 10;
+    const baseGain = ctx.createGain();
+    baseSrc.connect(baseLp); baseLp.connect(basePeak); basePeak.connect(baseGain); baseGain.connect(masterComp);
+    baseGain.gain.setValueAtTime(0, now);
+    baseGain.gain.linearRampToValueAtTime(0.55, now + 0.8);
+    baseGain.gain.setValueAtTime(0.55, now + FIRE_DURATION - 2.5);
+    baseGain.gain.exponentialRampToValueAtTime(0.001, now + FIRE_DURATION);
+    baseSrc.start(now);
+
+    // Layer 2: Mid crackle — the snapping and popping of burning material
+    const crackLen = Math.floor(ctx.sampleRate * FIRE_DURATION);
+    const crackBuf = ctx.createBuffer(1, crackLen, ctx.sampleRate);
+    const crackData = crackBuf.getChannelData(0);
+    for (let i = 0; i < crackLen; i++) {
+      // Sparse random pops — silence most of the time, occasional sharp burst
+      crackData[i] = Math.random() < 0.015 ? (Math.random() * 2 - 1) * 4 : 0;
+    }
+    const crackSrc = ctx.createBufferSource(); crackSrc.buffer = crackBuf;
+    const crackBp = ctx.createBiquadFilter(); crackBp.type = 'bandpass'; crackBp.frequency.value = 1200; crackBp.Q.value = 0.8;
+    const crackGain = ctx.createGain();
+    crackSrc.connect(crackBp); crackBp.connect(crackGain); crackGain.connect(masterComp);
+    crackGain.gain.setValueAtTime(0, now);
+    crackGain.gain.linearRampToValueAtTime(0.7, now + 1.2);
+    crackGain.gain.setValueAtTime(0.7, now + FIRE_DURATION - 2.0);
+    crackGain.gain.exponentialRampToValueAtTime(0.001, now + FIRE_DURATION);
+    crackSrc.start(now);
+
+    // Layer 3: High whoosh — flickering flame breath
+    const whooshLen = Math.floor(ctx.sampleRate * FIRE_DURATION);
+    const whooshBuf = ctx.createBuffer(1, whooshLen, ctx.sampleRate);
+    const whooshData = whooshBuf.getChannelData(0);
+    for (let i = 0; i < whooshLen; i++) whooshData[i] = Math.random() * 2 - 1;
+    const whooshSrc = ctx.createBufferSource(); whooshSrc.buffer = whooshBuf;
+    const whooshHp = ctx.createBiquadFilter(); whooshHp.type = 'bandpass'; whooshHp.frequency.value = 2800; whooshHp.Q.value = 0.4;
+    const whooshGain = ctx.createGain();
+    whooshSrc.connect(whooshHp); whooshHp.connect(whooshGain); whooshGain.connect(masterComp);
+    whooshGain.gain.setValueAtTime(0, now);
+    whooshGain.gain.linearRampToValueAtTime(0.18, now + 1.5);
+    whooshGain.gain.setValueAtTime(0.18, now + FIRE_DURATION - 3.0);
+    whooshGain.gain.exponentialRampToValueAtTime(0.001, now + FIRE_DURATION);
+    whooshSrc.start(now);
+  }
+
+  return { playTick, playExplosion, playFire, startAmbient };
 }
 
 export function Countdown() {
@@ -201,6 +256,11 @@ export function Countdown() {
           triggerExplosion();
           setRevealed(true);
           setFlash(false);
+          // Start fire effects 800ms after explosion (as fireball fades)
+          setTimeout(() => {
+            audioRef.current?.playFire();
+            triggerFire();
+          }, 800);
         }, 600);
         return;
       }
@@ -298,6 +358,172 @@ export function Countdown() {
         ctx2d.fill();
         ctx2d.globalAlpha = 1;
       });
+
+      requestAnimationFrame(draw);
+    }
+
+    requestAnimationFrame(draw);
+  };
+
+  // ── FIRE VISUAL: persistent flame tongues + smoke + embers after explosion ──
+  const triggerFire = () => {
+    const canvas = document.createElement('canvas');
+    canvas.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;z-index:9998;pointer-events:none;';
+    document.body.appendChild(canvas);
+    const W = canvas.width = window.innerWidth;
+    const H = canvas.height = window.innerHeight;
+    const ctx2d = canvas.getContext('2d')!;
+    const cx = W / 2;
+    const DURATION = 8000;
+    const start = performance.now();
+
+    // Fire particles — spawn from bottom-center, rise upward
+    interface FireParticle {
+      x: number; y: number; vx: number; vy: number;
+      size: number; life: number; maxLife: number;
+      type: 'flame' | 'ember' | 'smoke';
+      hue: number;
+    }
+
+    const particles: FireParticle[] = [];
+
+    function spawnParticles(elapsed: number) {
+      const intensity = Math.max(0, 1 - elapsed / DURATION);
+      const count = Math.floor(intensity * 8) + 2;
+      for (let i = 0; i < count; i++) {
+        const spread = 180 * intensity + 60;
+        const x = cx + (Math.random() - 0.5) * spread;
+        const baseY = H * 0.72;
+
+        // Flame tongue
+        if (Math.random() < 0.6) {
+          particles.push({
+            x, y: baseY,
+            vx: (Math.random() - 0.5) * 1.8,
+            vy: -(Math.random() * 5 + 3) * intensity - 1.5,
+            size: Math.random() * 28 + 10,
+            life: 0, maxLife: Math.random() * 900 + 400,
+            type: 'flame',
+            hue: Math.random() * 40, // 0-40 = red-orange range
+          });
+        }
+        // Ember
+        if (Math.random() < 0.25) {
+          particles.push({
+            x, y: baseY - Math.random() * 60,
+            vx: (Math.random() - 0.5) * 3,
+            vy: -(Math.random() * 4 + 2),
+            size: Math.random() * 3 + 1,
+            life: 0, maxLife: Math.random() * 1800 + 600,
+            type: 'ember',
+            hue: Math.random() * 50,
+          });
+        }
+        // Smoke
+        if (Math.random() < 0.15) {
+          particles.push({
+            x: cx + (Math.random() - 0.5) * spread * 0.6,
+            y: baseY - 60 - Math.random() * 40,
+            vx: (Math.random() - 0.5) * 0.8,
+            vy: -(Math.random() * 1.5 + 0.5),
+            size: Math.random() * 60 + 30,
+            life: 0, maxLife: Math.random() * 2500 + 1000,
+            type: 'smoke',
+            hue: 0,
+          });
+        }
+      }
+    }
+
+    let lastTime = start;
+
+    function draw(now: number) {
+      const elapsed = now - start;
+      const t = elapsed / DURATION;
+      const dt = now - lastTime;
+      lastTime = now;
+
+      if (t > 1) {
+        document.body.removeChild(canvas);
+        return;
+      }
+
+      ctx2d.clearRect(0, 0, W, H);
+
+      // Spawn new particles
+      spawnParticles(elapsed);
+
+      // Ground fire glow — ambient orange light pool at base
+      const intensity = Math.max(0, 1 - t);
+      const glowRadius = (180 + intensity * 120);
+      const glow = ctx2d.createRadialGradient(cx, H * 0.72, 0, cx, H * 0.72, glowRadius);
+      glow.addColorStop(0, `rgba(255,120,0,${(intensity * 0.35).toFixed(3)})`);
+      glow.addColorStop(0.5, `rgba(255,60,0,${(intensity * 0.15).toFixed(3)})`);
+      glow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx2d.fillStyle = glow;
+      ctx2d.fillRect(0, 0, W, H);
+
+      // Update and draw particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.life += dt;
+        if (p.life >= p.maxLife) { particles.splice(i, 1); continue; }
+
+        const lt = p.life / p.maxLife; // 0=birth, 1=death
+        p.x += p.vx * (dt / 16);
+        p.y += p.vy * (dt / 16);
+        // Turbulence
+        p.vx += (Math.random() - 0.5) * 0.3;
+        p.vy -= 0.05; // buoyancy
+
+        if (p.type === 'flame') {
+          // Flame: grows then shrinks, orange-yellow core
+          const sizeFactor = lt < 0.3 ? lt / 0.3 : 1 - (lt - 0.3) / 0.7;
+          const size = p.size * sizeFactor;
+          const alpha = lt < 0.15 ? lt / 0.15 : Math.pow(1 - lt, 1.3);
+          const grad = ctx2d.createRadialGradient(p.x, p.y, 0, p.x, p.y, size);
+          const lightness = 70 + (1 - lt) * 20;
+          grad.addColorStop(0,   `hsla(${60 - p.hue * 0.3}, 100%, ${lightness}%, ${alpha.toFixed(3)})`);
+          grad.addColorStop(0.3, `hsla(${30 - p.hue}, 100%, 60%, ${(alpha * 0.85).toFixed(3)})`);
+          grad.addColorStop(0.7, `hsla(${p.hue}, 100%, 40%, ${(alpha * 0.5).toFixed(3)})`);
+          grad.addColorStop(1,   `hsla(${p.hue}, 80%, 20%, 0)`);
+          ctx2d.fillStyle = grad;
+          ctx2d.beginPath();
+          ctx2d.ellipse(p.x, p.y, size * 0.55, size, 0, 0, Math.PI * 2);
+          ctx2d.fill();
+
+        } else if (p.type === 'ember') {
+          // Ember: bright hot dot, fades as it rises and cools
+          const alpha = Math.pow(1 - lt, 1.8) * (intensity * 0.6 + 0.4);
+          const size = p.size * (1 - lt * 0.4);
+          ctx2d.globalAlpha = alpha;
+          ctx2d.fillStyle = `hsl(${40 - p.hue * lt}, 100%, ${80 - lt * 40}%)`;
+          ctx2d.beginPath();
+          ctx2d.arc(p.x, p.y, size, 0, Math.PI * 2);
+          ctx2d.fill();
+          // Glow halo
+          const eGlow = ctx2d.createRadialGradient(p.x, p.y, 0, p.x, p.y, size * 3);
+          eGlow.addColorStop(0, `rgba(255,160,0,${(alpha * 0.4).toFixed(3)})`);
+          eGlow.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx2d.fillStyle = eGlow;
+          ctx2d.beginPath();
+          ctx2d.arc(p.x, p.y, size * 3, 0, Math.PI * 2);
+          ctx2d.fill();
+          ctx2d.globalAlpha = 1;
+
+        } else {
+          // Smoke: grey expanding ring, drifts upward
+          const alpha = lt < 0.1 ? (lt / 0.1) * 0.12 : Math.pow(1 - lt, 2) * 0.12;
+          const size = p.size * (1 + lt * 1.8);
+          const grey = Math.floor(30 + lt * 50);
+          ctx2d.globalAlpha = alpha;
+          ctx2d.fillStyle = `rgb(${grey},${grey},${grey})`;
+          ctx2d.beginPath();
+          ctx2d.arc(p.x, p.y, size, 0, Math.PI * 2);
+          ctx2d.fill();
+          ctx2d.globalAlpha = 1;
+        }
+      }
 
       requestAnimationFrame(draw);
     }
