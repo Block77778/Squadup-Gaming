@@ -66,76 +66,114 @@ function createAudioEngine() {
     }
   }
 
-  // ── COD/BATTLEFIELD-STYLE HARD EXPLOSION ──
+  // ── DRAMATIC MULTI-STAGE COD EXPLOSION ──
   function playExplosion() {
     const now = ctx.currentTime;
 
-    // Layer 1: Massive sub-bass punch — the shockwave hitting your chest
-    const subOsc = ctx.createOscillator(); const subGain = ctx.createGain();
-    subOsc.connect(subGain); subGain.connect(masterComp);
-    subOsc.type = 'sine';
-    subOsc.frequency.setValueAtTime(60, now);
-    subOsc.frequency.exponentialRampToValueAtTime(18, now + 0.8);
-    subGain.gain.setValueAtTime(3.5, now);
-    subGain.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
-    subOsc.start(now); subOsc.stop(now + 1.05);
+    // ─── STAGE 1: Initial detonation crack (0ms) ───
+    // Ultra-sharp transient — the primer igniting
+    const crackBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.025), ctx.sampleRate);
+    const crackData = crackBuf.getChannelData(0);
+    for (let i = 0; i < crackData.length; i++)
+      crackData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / crackData.length, 0.15);
+    const crackSrc = ctx.createBufferSource(); crackSrc.buffer = crackBuf;
+    const crackFilt = ctx.createBiquadFilter(); crackFilt.type = 'highpass'; crackFilt.frequency.value = 800;
+    const crackGain = ctx.createGain();
+    crackSrc.connect(crackFilt); crackFilt.connect(crackGain); crackGain.connect(masterComp);
+    crackGain.gain.setValueAtTime(5.0, now);
+    crackSrc.start(now);
 
-    // Layer 2: Sharp impact transient — the initial detonation crack
-    const impactBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.04), ctx.sampleRate);
-    const impactData = impactBuf.getChannelData(0);
-    for (let i = 0; i < impactData.length; i++) {
-      impactData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / impactData.length, 0.3);
-    }
-    const impactSrc = ctx.createBufferSource(); impactSrc.buffer = impactBuf;
-    const impactFilter = ctx.createBiquadFilter(); impactFilter.type = 'lowpass'; impactFilter.frequency.value = 3000;
-    const impactGain = ctx.createGain();
-    impactSrc.connect(impactFilter); impactFilter.connect(impactGain); impactGain.connect(masterComp);
-    impactGain.gain.setValueAtTime(4.0, now);
-    impactGain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
-    impactSrc.start(now);
+    // ─── STAGE 2: Main shockwave BOOM (20ms delay) ───
+    // Massive sub-bass chest punch — the primary pressure wave
+    const sub1 = ctx.createOscillator(); const sub1G = ctx.createGain();
+    sub1.connect(sub1G); sub1G.connect(masterComp);
+    sub1.type = 'sine';
+    sub1.frequency.setValueAtTime(80, now + 0.02);
+    sub1.frequency.exponentialRampToValueAtTime(16, now + 1.2);
+    sub1G.gain.setValueAtTime(4.5, now + 0.02);
+    sub1G.gain.exponentialRampToValueAtTime(0.001, now + 1.4);
+    sub1.start(now + 0.02); sub1.stop(now + 1.5);
 
-    // Layer 3: Heavy rumble tail — the rolling concussion wave
-    const rumbleLen = Math.floor(ctx.sampleRate * 3.5);
-    const rumbleBuf = ctx.createBuffer(1, rumbleLen, ctx.sampleRate);
-    const rumbleData = rumbleBuf.getChannelData(0);
-    for (let i = 0; i < rumbleLen; i++) rumbleData[i] = Math.random() * 2 - 1;
-    const rumbleSrc = ctx.createBufferSource(); rumbleSrc.buffer = rumbleBuf;
-    const rumbleLp = ctx.createBiquadFilter(); rumbleLp.type = 'lowpass'; rumbleLp.frequency.value = 350;
-    const rumblePeak = ctx.createBiquadFilter(); rumblePeak.type = 'peaking'; rumblePeak.frequency.value = 120; rumblePeak.gain.value = 14;
-    const rumbleGain = ctx.createGain();
-    rumbleSrc.connect(rumbleLp); rumbleLp.connect(rumblePeak); rumblePeak.connect(rumbleGain); rumbleGain.connect(masterComp);
-    rumbleGain.gain.setValueAtTime(0, now);
-    rumbleGain.gain.linearRampToValueAtTime(2.2, now + 0.02);
-    rumbleGain.gain.setValueAtTime(2.2, now + 0.1);
-    rumbleGain.gain.exponentialRampToValueAtTime(0.001, now + 3.5);
-    rumbleSrc.start(now);
+    // Second harmonic — adds thickness and power
+    const sub2 = ctx.createOscillator(); const sub2G = ctx.createGain();
+    sub2.connect(sub2G); sub2G.connect(masterComp);
+    sub2.type = 'sine';
+    sub2.frequency.setValueAtTime(160, now + 0.02);
+    sub2.frequency.exponentialRampToValueAtTime(35, now + 0.9);
+    sub2G.gain.setValueAtTime(2.5, now + 0.02);
+    sub2G.gain.exponentialRampToValueAtTime(0.001, now + 1.1);
+    sub2.start(now + 0.02); sub2.stop(now + 1.2);
 
-    // Layer 4: Mid-range debris crunch — shrapnel and structural collapse
-    const debrisLen = Math.floor(ctx.sampleRate * 1.5);
+    // ─── STAGE 3: Noise body (0ms) ───
+    // White noise shaped into the main explosion roar
+    const noiseLen = Math.floor(ctx.sampleRate * 4.0);
+    const noiseBuf = ctx.createBuffer(1, noiseLen, ctx.sampleRate);
+    const noiseData = noiseBuf.getChannelData(0);
+    for (let i = 0; i < noiseLen; i++) noiseData[i] = Math.random() * 2 - 1;
+    const noiseSrc = ctx.createBufferSource(); noiseSrc.buffer = noiseBuf;
+    const noiseLp = ctx.createBiquadFilter(); noiseLp.type = 'lowpass'; noiseLp.frequency.value = 600;
+    const noisePk = ctx.createBiquadFilter(); noisePk.type = 'peaking'; noisePk.frequency.value = 100; noisePk.gain.value = 18;
+    const noisePk2 = ctx.createBiquadFilter(); noisePk2.type = 'peaking'; noisePk2.frequency.value = 250; noisePk2.gain.value = 8;
+    const noiseGain = ctx.createGain();
+    noiseSrc.connect(noiseLp); noiseLp.connect(noisePk); noisePk.connect(noisePk2); noisePk2.connect(noiseGain); noiseGain.connect(masterComp);
+    noiseGain.gain.setValueAtTime(0, now);
+    noiseGain.gain.linearRampToValueAtTime(3.5, now + 0.015); // instant slam
+    noiseGain.gain.setValueAtTime(3.5, now + 0.08);
+    noiseGain.gain.exponentialRampToValueAtTime(0.8, now + 0.6);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 4.0);
+    noiseSrc.start(now);
+
+    // ─── STAGE 4: Mid debris crunch (60ms) ───
+    const debrisLen = Math.floor(ctx.sampleRate * 2.0);
     const debrisBuf = ctx.createBuffer(1, debrisLen, ctx.sampleRate);
     const debrisData = debrisBuf.getChannelData(0);
-    for (let i = 0; i < debrisLen; i++) {
-      debrisData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / debrisLen, 0.7);
-    }
+    for (let i = 0; i < debrisLen; i++)
+      debrisData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / debrisLen, 0.6);
     const debrisSrc = ctx.createBufferSource(); debrisSrc.buffer = debrisBuf;
-    const debrisBp = ctx.createBiquadFilter(); debrisBp.type = 'bandpass'; debrisBp.frequency.value = 800; debrisBp.Q.value = 0.5;
+    const debrisBp = ctx.createBiquadFilter(); debrisBp.type = 'bandpass'; debrisBp.frequency.value = 700; debrisBp.Q.value = 0.4;
     const debrisGain = ctx.createGain();
     debrisSrc.connect(debrisBp); debrisBp.connect(debrisGain); debrisGain.connect(masterComp);
-    debrisGain.gain.setValueAtTime(0, now + 0.02);
-    debrisGain.gain.linearRampToValueAtTime(1.4, now + 0.05);
-    debrisGain.gain.exponentialRampToValueAtTime(0.001, now + 1.6);
-    debrisSrc.start(now + 0.02);
+    debrisGain.gain.setValueAtTime(2.2, now + 0.06);
+    debrisGain.gain.exponentialRampToValueAtTime(0.001, now + 2.0);
+    debrisSrc.start(now + 0.06);
 
-    // Layer 5: High-freq pressure ring — that ear-ringing shockwave hiss
+    // ─── STAGE 5: Secondary blast (250ms) ───
+    // COD-style has a SECOND boom as gas ignites — delayed rumble
+    const sec = ctx.createOscillator(); const secG = ctx.createGain();
+    sec.connect(secG); secG.connect(masterComp);
+    sec.type = 'sine';
+    sec.frequency.setValueAtTime(55, now + 0.25);
+    sec.frequency.exponentialRampToValueAtTime(20, now + 1.0);
+    secG.gain.setValueAtTime(0, now + 0.25);
+    secG.gain.linearRampToValueAtTime(2.8, now + 0.3);
+    secG.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+    sec.start(now + 0.25); sec.stop(now + 1.3);
+
+    // ─── STAGE 6: Pressure ring — ear-ring shockwave (80ms) ───
     const ringOsc = ctx.createOscillator(); const ringGain = ctx.createGain();
     ringOsc.connect(ringGain); ringGain.connect(masterComp);
     ringOsc.type = 'sine';
-    ringOsc.frequency.setValueAtTime(3800, now + 0.05);
-    ringOsc.frequency.exponentialRampToValueAtTime(1200, now + 2.5);
-    ringGain.gain.setValueAtTime(0, now + 0.05);
-    ringGain.gain.linearRampToValueAtTime(0.18, now + 0.1);
-    ringGain.gain.exponentialRampToValueAtTime(0.001, now + 2.8);
-    ringOsc.start(now + 0.05); ringOsc.stop(now + 3.0);
+    ringOsc.frequency.setValueAtTime(4200, now + 0.08);
+    ringOsc.frequency.exponentialRampToValueAtTime(800, now + 3.5);
+    ringGain.gain.setValueAtTime(0, now + 0.08);
+    ringGain.gain.linearRampToValueAtTime(0.22, now + 0.12);
+    ringGain.gain.exponentialRampToValueAtTime(0.001, now + 3.8);
+    ringOsc.start(now + 0.08); ringOsc.stop(now + 4.0);
+
+    // ─── STAGE 7: Distant reverb tail (400ms) ───
+    // That rolling thunder that carries across the map
+    const tailLen = Math.floor(ctx.sampleRate * 3.0);
+    const tailBuf = ctx.createBuffer(1, tailLen, ctx.sampleRate);
+    const tailData = tailBuf.getChannelData(0);
+    for (let i = 0; i < tailLen; i++) tailData[i] = Math.random() * 2 - 1;
+    const tailSrc = ctx.createBufferSource(); tailSrc.buffer = tailBuf;
+    const tailLp = ctx.createBiquadFilter(); tailLp.type = 'lowpass'; tailLp.frequency.value = 180;
+    const tailGain = ctx.createGain();
+    tailSrc.connect(tailLp); tailLp.connect(tailGain); tailGain.connect(masterComp);
+    tailGain.gain.setValueAtTime(0, now + 0.4);
+    tailGain.gain.linearRampToValueAtTime(1.2, now + 0.55);
+    tailGain.gain.exponentialRampToValueAtTime(0.001, now + 3.5);
+    tailSrc.start(now + 0.4);
   }
 
   function startAmbient() {
@@ -154,7 +192,60 @@ function createAudioEngine() {
     };
   }
 
-  return { playTick, playExplosion, startAmbient };
+  // ── FIRE: soft relaxing bonfire crackle ──
+  function playFire() {
+    const now = ctx.currentTime;
+    const FIRE_DURATION = 10.0;
+
+    // Low warm rumble — gentle combustion breath
+    const baseLen = Math.floor(ctx.sampleRate * FIRE_DURATION);
+    const baseBuf = ctx.createBuffer(1, baseLen, ctx.sampleRate);
+    const baseData = baseBuf.getChannelData(0);
+    for (let i = 0; i < baseLen; i++) baseData[i] = Math.random() * 2 - 1;
+    const baseSrc = ctx.createBufferSource(); baseSrc.buffer = baseBuf;
+    const baseLp = ctx.createBiquadFilter(); baseLp.type = 'lowpass'; baseLp.frequency.value = 160;
+    const baseGain = ctx.createGain();
+    baseSrc.connect(baseLp); baseLp.connect(baseGain); baseGain.connect(masterComp);
+    baseGain.gain.setValueAtTime(0, now);
+    baseGain.gain.linearRampToValueAtTime(0.18, now + 2.0);
+    baseGain.gain.setValueAtTime(0.18, now + FIRE_DURATION - 3.0);
+    baseGain.gain.exponentialRampToValueAtTime(0.001, now + FIRE_DURATION);
+    baseSrc.start(now);
+
+    // Gentle crackle pops — sparse, quiet, like a campfire
+    const crackLen = Math.floor(ctx.sampleRate * FIRE_DURATION);
+    const crackBuf = ctx.createBuffer(1, crackLen, ctx.sampleRate);
+    const crackData = crackBuf.getChannelData(0);
+    for (let i = 0; i < crackLen; i++) {
+      crackData[i] = Math.random() < 0.006 ? (Math.random() * 2 - 1) * 2.5 : 0;
+    }
+    const crackSrc = ctx.createBufferSource(); crackSrc.buffer = crackBuf;
+    const crackBp = ctx.createBiquadFilter(); crackBp.type = 'bandpass'; crackBp.frequency.value = 900; crackBp.Q.value = 1.2;
+    const crackGain = ctx.createGain();
+    crackSrc.connect(crackBp); crackBp.connect(crackGain); crackGain.connect(masterComp);
+    crackGain.gain.setValueAtTime(0, now);
+    crackGain.gain.linearRampToValueAtTime(0.22, now + 1.5);
+    crackGain.gain.setValueAtTime(0.22, now + FIRE_DURATION - 2.5);
+    crackGain.gain.exponentialRampToValueAtTime(0.001, now + FIRE_DURATION);
+    crackSrc.start(now);
+
+    // Airy high hiss — barely audible flame breath
+    const hissLen = Math.floor(ctx.sampleRate * FIRE_DURATION);
+    const hissBuf = ctx.createBuffer(1, hissLen, ctx.sampleRate);
+    const hissData = hissBuf.getChannelData(0);
+    for (let i = 0; i < hissLen; i++) hissData[i] = Math.random() * 2 - 1;
+    const hissSrc = ctx.createBufferSource(); hissSrc.buffer = hissBuf;
+    const hissHp = ctx.createBiquadFilter(); hissHp.type = 'bandpass'; hissHp.frequency.value = 3500; hissHp.Q.value = 0.3;
+    const hissGain = ctx.createGain();
+    hissSrc.connect(hissHp); hissHp.connect(hissGain); hissGain.connect(masterComp);
+    hissGain.gain.setValueAtTime(0, now);
+    hissGain.gain.linearRampToValueAtTime(0.06, now + 2.5);
+    hissGain.gain.setValueAtTime(0.06, now + FIRE_DURATION - 3.5);
+    hissGain.gain.exponentialRampToValueAtTime(0.001, now + FIRE_DURATION);
+    hissSrc.start(now);
+  }
+
+  return { playTick, playExplosion, playFire, startAmbient };
 }
 
 export function Countdown() {
@@ -166,6 +257,8 @@ export function Countdown() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioRef = useRef<ReturnType<typeof createAudioEngine> | null>(null);
   const stopAmbientRef = useRef<(() => void) | null>(null);
+  const fireCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const fireAnimRef = useRef<number | null>(null);
 
   const isUrgent = count !== null && count <= 3;
 
@@ -201,6 +294,11 @@ export function Countdown() {
           triggerExplosion();
           setRevealed(true);
           setFlash(false);
+          // Start fire effects 800ms after explosion (as fireball fades)
+          setTimeout(() => {
+            audioRef.current?.playFire();
+            triggerFire();
+          }, 800);
         }, 600);
         return;
       }
@@ -217,92 +315,357 @@ export function Countdown() {
 
   const triggerExplosion = () => {
     const canvas = document.createElement('canvas');
-    canvas.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;z-index:9999;pointer-events:none;';
+    canvas.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;z-index:99999;pointer-events:none;';
     document.body.appendChild(canvas);
     const W = canvas.width = window.innerWidth;
     const H = canvas.height = window.innerHeight;
-    const ctx2d = canvas.getContext('2d')!;
+    const c = canvas.getContext('2d')!;
     const cx = W / 2, cy = H / 2;
-    const start = performance.now();
-    const DURATION = 3000;
+    const t0 = performance.now();
 
-    // Embers
-    const embers = Array.from({ length: 220 }, () => {
+    // Debris particles
+    const debris = Array.from({ length: 280 }, (_, i) => {
       const angle = Math.random() * Math.PI * 2;
-      const speed = Math.random() * 18 + 4;
-      const size = Math.random() * 4 + 1;
-      const life = Math.random() * 0.5 + 0.5;
-      const colors = ['#ff4400','#ff6600','#ff8800','#ffaa00','#ffcc00','#ffffff','#ff2200'];
-      return { x: cx, y: cy, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - Math.random() * 6, size, life, color: colors[Math.floor(Math.random() * colors.length)], gravity: Math.random() * 0.3 + 0.1 };
+      const spd = Math.random() * 22 + 6;
+      const isHot = i < 120;
+      return {
+        x: cx, y: cy,
+        vx: Math.cos(angle) * spd * (0.6 + Math.random() * 0.4),
+        vy: Math.sin(angle) * spd * (0.6 + Math.random() * 0.4) - Math.random() * 8,
+        size: isHot ? Math.random() * 5 + 1.5 : Math.random() * 3 + 0.5,
+        life: Math.random() * 0.4 + 0.6,
+        color: isHot
+          ? ['#fff','#ffee88','#ffaa00','#ff6600','#ff2200'][Math.floor(Math.random()*5)]
+          : ['#888','#666','#444','#333'][Math.floor(Math.random()*4)],
+        grav: Math.random() * 0.5 + 0.2,
+        trail: [] as {x:number,y:number}[],
+      };
     });
 
-    // Shockwave rings
+    // Shockwave rings — 5 of them, different speeds/colors
     const rings = [
-      { delay: 0,   color: 'rgba(255,200,80,', maxR: Math.max(W, H) * 0.85, thickness: 18 },
-      { delay: 80,  color: 'rgba(255,120,30,', maxR: Math.max(W, H) * 0.65, thickness: 10 },
-      { delay: 160, color: 'rgba(255,255,255,', maxR: Math.max(W, H) * 0.45, thickness: 6  },
+      { delay:0,   maxR: Math.max(W,H)*1.1, thick:28, r:'255,255,200' },
+      { delay:40,  maxR: Math.max(W,H)*0.95, thick:18, r:'255,160,0' },
+      { delay:100, maxR: Math.max(W,H)*0.78, thick:12, r:'255,80,0' },
+      { delay:200, maxR: Math.max(W,H)*0.55, thick:8,  r:'200,40,0' },
+      { delay:350, maxR: Math.max(W,H)*0.38, thick:5,  r:'255,220,100' },
     ];
+
+    // Smoke puffs
+    const smokes = Array.from({ length: 16 }, () => ({
+      x: cx + (Math.random()-0.5)*120,
+      y: cy + (Math.random()-0.5)*80,
+      vx: (Math.random()-0.5)*2.5,
+      vy: -(Math.random()*3+1.5),
+      r: Math.random()*60+30,
+      delay: Math.random()*400,
+    }));
+
+    const TOTAL = 5000;
+
+    function frame(now: number) {
+      const el = now - t0;
+      const gt = el / TOTAL;
+      if (gt > 1) { document.body.removeChild(canvas); return; }
+
+      c.clearRect(0, 0, W, H);
+
+      // ── Shockwaves ──
+      rings.forEach(ring => {
+        const rt = Math.max(0, (el - ring.delay) / (TOTAL * 0.4));
+        if (rt <= 0 || rt > 1) return;
+        const radius = rt * ring.maxR;
+        const alpha = Math.pow(1 - rt, 2.2);
+        const width = ring.thick * (1 - rt * 0.6);
+        c.beginPath();
+        c.arc(cx, cy, radius, 0, Math.PI*2);
+        c.strokeStyle = `rgba(${ring.r},${alpha.toFixed(3)})`;
+        c.lineWidth = width;
+        c.stroke();
+      });
+
+      // ── Central fireball — 3-phase: white → orange → red ──
+      if (el < 800) {
+        const ft = el / 800;
+        const alpha = Math.pow(1 - ft, 0.7);
+        const maxR = Math.min(W, H) * 0.55;
+        const r = (1 - Math.pow(ft, 0.35)) * maxR + 30;
+        const g = c.createRadialGradient(cx, cy, 0, cx, cy, r);
+        if (ft < 0.25) {
+          g.addColorStop(0, `rgba(255,255,255,${alpha.toFixed(3)})`);
+          g.addColorStop(0.25,`rgba(255,255,180,${alpha.toFixed(3)})`);
+          g.addColorStop(0.6, `rgba(255,160,0,${(alpha*0.8).toFixed(3)})`);
+          g.addColorStop(1,   'rgba(0,0,0,0)');
+        } else {
+          g.addColorStop(0,   `rgba(255,220,80,${(alpha*0.9).toFixed(3)})`);
+          g.addColorStop(0.3, `rgba(255,100,0,${(alpha*0.8).toFixed(3)})`);
+          g.addColorStop(0.65,`rgba(180,20,0,${(alpha*0.5).toFixed(3)})`);
+          g.addColorStop(1,   'rgba(0,0,0,0)');
+        }
+        c.fillStyle = g;
+        c.beginPath(); c.arc(cx, cy, r, 0, Math.PI*2); c.fill();
+      }
+
+      // ── Secondary explosion bloom (250ms) ──
+      if (el > 250 && el < 1200) {
+        const st = (el - 250) / 950;
+        const alpha = Math.pow(1 - st, 1.5);
+        const r = st * Math.min(W,H) * 0.38;
+        const g2 = c.createRadialGradient(cx, cy, 0, cx, cy, r);
+        g2.addColorStop(0,   `rgba(255,200,50,${alpha.toFixed(3)})`);
+        g2.addColorStop(0.4, `rgba(255,80,0,${(alpha*0.7).toFixed(3)})`);
+        g2.addColorStop(1,   'rgba(0,0,0,0)');
+        c.fillStyle = g2;
+        c.beginPath(); c.arc(cx, cy, r, 0, Math.PI*2); c.fill();
+      }
+
+      // ── Screen-edge vignette flash ──
+      if (el < 300) {
+        const vt = el / 300;
+        const va = (1 - vt) * 0.7;
+        const vg = c.createRadialGradient(cx, cy, Math.min(W,H)*0.3, cx, cy, Math.max(W,H)*0.9);
+        vg.addColorStop(0, 'rgba(0,0,0,0)');
+        vg.addColorStop(1, `rgba(255,80,0,${va.toFixed(3)})`);
+        c.fillStyle = vg; c.fillRect(0,0,W,H);
+      }
+
+      // ── Smoke puffs ──
+      smokes.forEach(sm => {
+        const st = Math.max(0, (el - sm.delay) / 3000);
+        if (st <= 0 || st > 1) return;
+        const sr = sm.r * (1 + st * 3.5);
+        const sa = st < 0.1 ? st/0.1 * 0.18 : Math.pow(1-st, 2.5) * 0.18;
+        const sx = sm.x + sm.vx * st * 60;
+        const sy = sm.y + sm.vy * st * 60;
+        const grey = Math.floor(20 + st * 80);
+        c.globalAlpha = sa;
+        c.fillStyle = `rgb(${grey},${grey},${grey})`;
+        c.beginPath(); c.arc(sx, sy, sr, 0, Math.PI*2); c.fill();
+        c.globalAlpha = 1;
+      });
+
+      // ── Debris/embers ──
+      const dt16 = Math.min((now - (t0 + el - 16)) / 16, 3);
+      debris.forEach(d => {
+        const lt = gt / d.life;
+        if (lt > 1) return;
+        const alpha = Math.pow(1 - lt, 1.4);
+        d.x += d.vx * 0.016 * 60;
+        d.y += d.vy * 0.016 * 60;
+        d.vy += d.grav * 0.016 * 60 * 0.016;
+        d.vx *= 0.995;
+        d.trail.push({ x: d.x, y: d.y });
+        if (d.trail.length > 8) d.trail.shift();
+
+        // Streak trail
+        if (d.trail.length > 2) {
+          c.beginPath();
+          c.moveTo(d.trail[0].x, d.trail[0].y);
+          d.trail.forEach(p => c.lineTo(p.x, p.y));
+          c.strokeStyle = d.color;
+          c.globalAlpha = alpha * 0.35;
+          c.lineWidth = d.size * 0.5;
+          c.stroke();
+          c.globalAlpha = 1;
+        }
+
+        // Core dot
+        c.globalAlpha = alpha;
+        c.fillStyle = d.color;
+        c.beginPath(); c.arc(d.x, d.y, d.size * (1 - lt * 0.5), 0, Math.PI*2); c.fill();
+        c.globalAlpha = 1;
+      });
+
+      requestAnimationFrame(frame);
+    }
+
+    requestAnimationFrame(frame);
+  };
+
+  // ── FIRE VISUAL: hardcore COD-style fire rendered on internal canvas ref ──
+  const triggerFire = () => {
+    const canvas = fireCanvasRef.current;
+    if (!canvas) return;
+    const W = canvas.width = canvas.offsetWidth;
+    const H = canvas.height = canvas.offsetHeight;
+    const ctx2d = canvas.getContext('2d');
+    if (!ctx2d) return;
+
+    const DURATION = 10000;
+    const start = performance.now();
+
+    interface Particle {
+      x: number; y: number; vx: number; vy: number;
+      size: number; life: number; maxLife: number;
+      type: 'flame' | 'ember' | 'smoke';
+      hue: number; wobble: number; wobbleSpeed: number;
+    }
+
+    const particles: Particle[] = [];
+
+    // Pre-seed dense initial burst — fire is visible immediately
+    for (let i = 0; i < 140; i++) {
+      const spread = 280;
+      const t_off = Math.random();
+      particles.push({
+        x: W * 0.5 + (Math.random() - 0.5) * spread,
+        y: H - t_off * 320,
+        vx: (Math.random() - 0.5) * 2.8,
+        vy: -(Math.random() * 7 + 4),
+        size: Math.random() * 65 + 22,
+        life: t_off * 700, maxLife: Math.random() * 900 + 500,
+        type: 'flame', hue: Math.random() * 35,
+        wobble: Math.random() * Math.PI * 2,
+        wobbleSpeed: Math.random() * 0.1 + 0.03,
+      });
+    }
+    for (let i = 0; i < 70; i++) {
+      particles.push({
+        x: W * 0.5 + (Math.random() - 0.5) * 320,
+        y: H - Math.random() * 280,
+        vx: (Math.random() - 0.5) * 4,
+        vy: -(Math.random() * 5 + 2),
+        size: Math.random() * 4 + 1.5,
+        life: Math.random() * 500, maxLife: Math.random() * 2200 + 800,
+        type: 'ember', hue: Math.random() * 40,
+        wobble: 0, wobbleSpeed: 0,
+      });
+    }
+
+    function spawnBatch(elapsed: number) {
+      const fadeOut = Math.max(0, 1 - elapsed / DURATION);
+      const count = Math.floor(fadeOut * 14) + 4;
+      const spread = 240 * fadeOut + 90;
+
+      for (let i = 0; i < count; i++) {
+        particles.push({
+          x: W * 0.5 + (Math.random() - 0.5) * spread,
+          y: H,
+          vx: (Math.random() - 0.5) * 2.8,
+          vy: -(Math.random() * 8 + 4),
+          size: Math.random() * 68 + 20,
+          life: 0, maxLife: Math.random() * 850 + 450,
+          type: 'flame', hue: Math.random() * 35,
+          wobble: Math.random() * Math.PI * 2,
+          wobbleSpeed: Math.random() * 0.1 + 0.03,
+        });
+      }
+      for (let i = 0; i < Math.ceil(count * 0.45); i++) {
+        particles.push({
+          x: W * 0.5 + (Math.random() - 0.5) * spread,
+          y: H - Math.random() * 90,
+          vx: (Math.random() - 0.5) * 4.5,
+          vy: -(Math.random() * 4.5 + 1.5),
+          size: Math.random() * 4.5 + 1,
+          life: 0, maxLife: Math.random() * 2800 + 1000,
+          type: 'ember', hue: Math.random() * 40,
+          wobble: 0, wobbleSpeed: 0,
+        });
+      }
+      if (Math.random() < 0.2) {
+        particles.push({
+          x: W * 0.5 + (Math.random() - 0.5) * spread * 0.5,
+          y: H - 90 - Math.random() * 70,
+          vx: (Math.random() - 0.5) * 0.7,
+          vy: -(Math.random() * 1.2 + 0.4),
+          size: Math.random() * 90 + 45,
+          life: 0, maxLife: Math.random() * 4000 + 1500,
+          type: 'smoke', hue: 0, wobble: 0, wobbleSpeed: 0,
+        });
+      }
+    }
+
+    let lastT = start;
 
     function draw(now: number) {
       const elapsed = now - start;
-      const t = elapsed / DURATION;
-      if (t > 1) { document.body.removeChild(canvas); return; }
+      const globalT = elapsed / DURATION;
+      const dt = Math.min(now - lastT, 50);
+      lastT = now;
+
+      if (globalT > 1.05) {
+        ctx2d.clearRect(0, 0, W, H);
+        return;
+      }
 
       ctx2d.clearRect(0, 0, W, H);
 
-      // Shockwave rings
-      rings.forEach(ring => {
-        const rt = Math.max(0, (elapsed - ring.delay) / (DURATION * 0.55));
-        if (rt <= 0 || rt > 1) return;
-        const r = rt * ring.maxR;
-        const alpha = Math.pow(1 - rt, 1.8);
-        const width = ring.thickness * (1 - rt * 0.7);
-        ctx2d.beginPath();
-        ctx2d.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx2d.strokeStyle = `${ring.color}${alpha.toFixed(3)})`;
-        ctx2d.lineWidth = width;
-        ctx2d.stroke();
+      const intensity = Math.max(0, 1 - globalT);
+
+      // Ground fire glow — wide orange bloom rising from bottom
+      const glowW = 300 + intensity * 200;
+      const glow = ctx2d.createRadialGradient(W / 2, H, 0, W / 2, H - 150, glowW);
+      glow.addColorStop(0,    `rgba(255,140,0,${(intensity * 0.6).toFixed(3)})`);
+      glow.addColorStop(0.3,  `rgba(255,60,0,${(intensity * 0.4).toFixed(3)})`);
+      glow.addColorStop(0.65, `rgba(180,20,0,${(intensity * 0.15).toFixed(3)})`);
+      glow.addColorStop(1,    'rgba(0,0,0,0)');
+      ctx2d.fillStyle = glow;
+      ctx2d.fillRect(0, 0, W, H);
+
+      spawnBatch(elapsed);
+
+      // Render order: smoke → flame → ember
+      const sorted = particles.slice().sort((a, b) => {
+        const o = { smoke: 0, flame: 1, ember: 2 } as const;
+        return o[a.type] - o[b.type];
       });
 
-      // Central fireball glow
-      if (t < 0.45) {
-        const ft = t / 0.45;
-        const alpha = Math.pow(1 - ft, 1.2);
-        const radius = (1 - Math.pow(ft, 0.4)) * 320 + 40;
-        const grad = ctx2d.createRadialGradient(cx, cy, 0, cx, cy, radius);
-        grad.addColorStop(0, `rgba(255,255,220,${(alpha * 0.95).toFixed(3)})`);
-        grad.addColorStop(0.2, `rgba(255,180,20,${(alpha * 0.85).toFixed(3)})`);
-        grad.addColorStop(0.55, `rgba(255,60,0,${(alpha * 0.5).toFixed(3)})`);
-        grad.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx2d.fillStyle = grad;
-        ctx2d.beginPath();
-        ctx2d.arc(cx, cy, radius, 0, Math.PI * 2);
-        ctx2d.fill();
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.life += dt;
+        if (p.life >= p.maxLife) { particles.splice(i, 1); continue; }
+
+        const lt = p.life / p.maxLife;
+        const dtS = dt / 16;
+        p.wobble += p.wobbleSpeed;
+        p.x += (p.vx + Math.sin(p.wobble) * 1.0) * dtS;
+        p.y += p.vy * dtS;
+        p.vy += 0.045 * dtS;
+
+        if (p.type === 'flame') {
+          const grow = lt < 0.2 ? lt / 0.2 : 1;
+          const shrink = lt > 0.3 ? 1 - (lt - 0.3) / 0.7 : 1;
+          const s = p.size * grow * shrink;
+          const alpha = (lt < 0.1 ? lt / 0.1 : Math.pow(1 - lt, 1.05)) * (intensity * 0.85 + 0.12);
+          const grad = ctx2d.createRadialGradient(p.x, p.y + s * 0.15, s * 0.05, p.x, p.y, s);
+          grad.addColorStop(0,    `hsla(58,100%,98%,${Math.min(1, alpha * 1.3).toFixed(3)})`);
+          grad.addColorStop(0.12, `hsla(48,100%,85%,${alpha.toFixed(3)})`);
+          grad.addColorStop(0.38, `hsla(${28 - p.hue},100%,58%,${alpha.toFixed(3)})`);
+          grad.addColorStop(0.68, `hsla(${10 + p.hue},100%,36%,${(alpha * 0.72).toFixed(3)})`);
+          grad.addColorStop(1,    'hsla(0,70%,12%,0)');
+          ctx2d.fillStyle = grad;
+          ctx2d.beginPath();
+          ctx2d.ellipse(p.x, p.y, s * 0.4, s, Math.sin(p.wobble * 0.4) * 0.2, 0, Math.PI * 2);
+          ctx2d.fill();
+
+        } else if (p.type === 'ember') {
+          const alpha = Math.pow(1 - lt, 1.5) * Math.min(1, intensity + 0.35);
+          const s = p.size * (1 - lt * 0.4);
+          const eg = ctx2d.createRadialGradient(p.x, p.y, 0, p.x, p.y, s * 6);
+          eg.addColorStop(0, `rgba(255,200,0,${(alpha * 0.5).toFixed(3)})`);
+          eg.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx2d.fillStyle = eg;
+          ctx2d.beginPath(); ctx2d.arc(p.x, p.y, s * 6, 0, Math.PI * 2); ctx2d.fill();
+          ctx2d.globalAlpha = Math.min(1, alpha);
+          ctx2d.fillStyle = `hsl(${38 - p.hue * lt * 1.5},100%,${88 - lt * 48}%)`;
+          ctx2d.beginPath(); ctx2d.arc(p.x, p.y, s, 0, Math.PI * 2); ctx2d.fill();
+          ctx2d.globalAlpha = 1;
+
+        } else {
+          const alpha = (lt < 0.08 ? lt / 0.08 : Math.pow(1 - lt, 2.2)) * 0.16;
+          const s = p.size * (1 + lt * 2.4);
+          const grey = Math.floor(18 + lt * 60);
+          ctx2d.globalAlpha = alpha;
+          ctx2d.fillStyle = `rgb(${grey},${grey},${grey})`;
+          ctx2d.beginPath(); ctx2d.arc(p.x, p.y, s, 0, Math.PI * 2); ctx2d.fill();
+          ctx2d.globalAlpha = 1;
+        }
       }
 
-      // Embers
-      const dt = 16;
-      embers.forEach(e => {
-        if (t > e.life) return;
-        const et = t / e.life;
-        e.x += e.vx * (dt / 1000) * (1 - et * 0.6) * 60;
-        e.y += (e.vy + e.gravity * elapsed / 16) * (dt / 1000) * 60;
-        const alpha = Math.pow(1 - et, 1.5);
-        const s = e.size * (1 - et * 0.5);
-        ctx2d.beginPath();
-        ctx2d.arc(e.x, e.y, s, 0, Math.PI * 2);
-        ctx2d.fillStyle = e.color.replace(')', `,${alpha.toFixed(2)})`).replace('rgb', 'rgba');
-        // fallback: just set globalAlpha
-        ctx2d.globalAlpha = alpha;
-        ctx2d.fillStyle = e.color;
-        ctx2d.fill();
-        ctx2d.globalAlpha = 1;
-      });
-
-      requestAnimationFrame(draw);
+      fireAnimRef.current = requestAnimationFrame(draw);
     }
 
-    requestAnimationFrame(draw);
+    fireAnimRef.current = requestAnimationFrame(draw);
   };
 
   // Clean cinematic animation per phase — no bouncing, no breathing during hold
@@ -384,61 +747,48 @@ export function Countdown() {
         }} />
       )}
 
-      {/* Deep space background */}
+      {/* Fire canvas — always mounted, drawn on after explosion. z-index 40 = above text */}
+      <canvas
+        ref={fireCanvasRef}
+        className="absolute inset-0 pointer-events-none"
+        style={{ width: '100%', height: '100%', zIndex: 40 }}
+      />
+
+      {/* Dark smoky COD battlefield background */}
       <div className="absolute inset-0" style={{
-        background: 'radial-gradient(ellipse at 20% 50%, rgba(20,10,0,1) 0%, #000 60%), radial-gradient(ellipse at 80% 50%, rgba(15,8,0,1) 0%, #000 60%)',
+        background: 'radial-gradient(ellipse at 50% 60%, rgba(80,25,0,0.9) 0%, rgba(30,8,0,1) 40%, rgba(5,2,0,1) 75%, #000 100%)',
       }} />
 
-      {/* Ambient golden fog */}
+      {/* Smoke/ember atmospheric haze */}
       <div className="absolute inset-0 pointer-events-none" style={{
-        background: 'radial-gradient(ellipse at center, rgba(218,165,32,0.08) 0%, transparent 65%)',
-        animation: 'breatheFog 4s ease-in-out infinite',
+        background: 'radial-gradient(ellipse at 50% 80%, rgba(140,40,0,0.25) 0%, transparent 55%), radial-gradient(ellipse at 20% 40%, rgba(80,20,0,0.15) 0%, transparent 40%), radial-gradient(ellipse at 80% 30%, rgba(60,15,0,0.12) 0%, transparent 35%)',
+        animation: 'breatheFog 5s ease-in-out infinite',
       }} />
 
-      {/* Ground light beam */}
+      {/* Ground ember light beam */}
       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 pointer-events-none" style={{
-        width: '600px',
-        height: '60%',
-        background: 'conic-gradient(from 268deg at 50% 100%, transparent 0deg, rgba(218,165,32,0.06) 4deg, transparent 8deg)',
-        filter: 'blur(20px)',
+        width: '700px',
+        height: '65%',
+        background: 'conic-gradient(from 268deg at 50% 100%, transparent 0deg, rgba(200,60,0,0.08) 4deg, transparent 8deg)',
+        filter: 'blur(25px)',
       }} />
 
-      {/* Stars */}
+      {/* Floating embers — replace stars */}
       <div className="absolute inset-0">
-        {[...Array(120)].map((_, i) => (
+        {[...Array(80)].map((_, i) => (
           <div
             key={i}
             className="absolute rounded-full"
             style={{
-              width: Math.random() * 2.5 + 0.5 + 'px',
-              height: Math.random() * 2.5 + 0.5 + 'px',
+              width: Math.random() * 3 + 1 + 'px',
+              height: Math.random() * 3 + 1 + 'px',
               left: Math.random() * 100 + '%',
               top: Math.random() * 100 + '%',
-              background: Math.random() > 0.8 ? '#ffd700' : '#ffffff',
-              opacity: Math.random() * 0.7 + 0.2,
-              animation: `twinkle ${Math.random() * 4 + 2}s infinite`,
-              animationDelay: Math.random() * 4 + 's',
-            }}
-          />
-        ))}
-      </div>
-
-      {/* Floating gold dust */}
-      <div className="absolute inset-0 pointer-events-none">
-        {[...Array(20)].map((_, i) => (
-          <div
-            key={i}
-            className="absolute rounded-full"
-            style={{
-              width: Math.random() * 4 + 2 + 'px',
-              height: Math.random() * 4 + 2 + 'px',
-              left: Math.random() * 100 + '%',
-              bottom: '-10px',
-              background: 'radial-gradient(circle, #ffd700, #daa520)',
-              boxShadow: '0 0 6px #ffd700',
-              animation: `floatDust ${Math.random() * 8 + 6}s ease-in-out infinite`,
+              background: Math.random() > 0.5 ? '#ff6600' : Math.random() > 0.5 ? '#ffaa00' : '#ff2200',
+              boxShadow: '0 0 4px #ff4400, 0 0 8px rgba(255,80,0,0.6)',
+              opacity: Math.random() * 0.6 + 0.2,
+              animation: `floatDust ${Math.random() * 6 + 4}s ease-in-out infinite`,
               animationDelay: Math.random() * 6 + 's',
-              opacity: 0,
             }}
           />
         ))}
@@ -564,94 +914,72 @@ export function Countdown() {
             </div>
           </div>
 
-          {/* COMING SOON — 3D Gold Metallic */}
-          <div style={{
-            perspective: '1400px',
-            animation: 'fadeSlideUp 1s ease-out 0.3s both',
-          }}>
+          {/* COMING SOON — fire-engulfed, cracked stone, matching the image */}
+          <div style={{ position: 'relative', lineHeight: 1, margin: '0 auto', textAlign: 'center' }}>
+
+            {/* Ambient fire glow behind text */}
             <div style={{
-              transformStyle: 'preserve-3d',
-              animation: 'gentleRock 6s ease-in-out infinite',
-              position: 'relative',
-              lineHeight: 1,
-            }}>
+              position: 'absolute', inset: '-40px -60px',
+              background: 'radial-gradient(ellipse at 50% 70%, rgba(255,80,0,0.55) 0%, rgba(200,40,0,0.3) 35%, rgba(100,10,0,0.15) 60%, transparent 80%)',
+              filter: 'blur(18px)',
+              zIndex: 0,
+              animation: 'firePulse 1.8s ease-in-out infinite',
+            }} />
 
-              {/* COMING — silver metallic (top word in image) */}
-              <div style={{ position: 'relative', display: 'block', textAlign: 'center' }}>
-                {/* Gold border glow behind */}
-                <span aria-hidden style={{
-                  display: 'block',
-                  position: 'absolute',
-                  inset: 0,
-                  fontSize: 'clamp(3.5rem, 9vw, 6.5rem)',
-                  fontWeight: '900',
-                  fontFamily: '"Georgia", "Times New Roman", serif',
-                  letterSpacing: '0.14em',
-                  lineHeight: 0.95,
-                  textAlign: 'center',
-                  color: '#ffd700',
-                  opacity: 0.15,
-                  filter: 'blur(8px)',
-                  pointerEvents: 'none',
-                }}>COMING</span>
-
-                <span style={{
-                  display: 'block',
-                  fontSize: 'clamp(3.5rem, 9vw, 6.5rem)',
-                  fontWeight: '900',
-                  fontFamily: '"Georgia", "Times New Roman", serif',
-                  letterSpacing: '0.14em',
-                  lineHeight: 0.95,
-                  textAlign: 'center',
-                  // Silver metallic like the image
-                  background: 'linear-gradient(180deg, #ffffff 0%, #e0e0e0 20%, #c0c0c0 40%, #f5f5f5 55%, #a8a8a8 70%, #d0d0d0 85%, #888 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                  filter: 'drop-shadow(0 0 2px rgba(255,215,0,0.8)) drop-shadow(2px 2px 0 #8b6914) drop-shadow(4px 4px 0 #6b4f00) drop-shadow(6px 6px 0 rgba(0,0,0,0.6))',
-                }}>COMING</span>
-              </div>
-
-              {/* SOON — deep gold/bronze (bottom word in image, larger) */}
-              <div style={{ position: 'relative', display: 'block', textAlign: 'center', marginTop: '-0.08em' }}>
-
-                <span style={{
-                  display: 'block',
-                  fontSize: 'clamp(5rem, 13vw, 9rem)',
-                  fontWeight: '900',
-                  fontFamily: '"Georgia", "Times New Roman", serif',
-                  letterSpacing: '0.1em',
-                  lineHeight: 0.95,
-                  textAlign: 'center',
-                  // Deep gold/bronze matching image
-                  background: 'linear-gradient(180deg, #fff8dc 0%, #ffd700 15%, #daa520 35%, #c8941a 50%, #b8860b 65%, #8b6914 82%, #6b4f0a 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                  filter: 'drop-shadow(3px 3px 0 #7a5200) drop-shadow(6px 6px 0 #4a3000) drop-shadow(9px 9px 0 rgba(0,0,0,0.7))',
-                }}>SOON</span>
-
-                {/* Ground reflection */}
-                <span aria-hidden style={{
-                  display: 'block',
-                  fontSize: 'clamp(5rem, 13vw, 9rem)',
-                  fontWeight: '900',
-                  fontFamily: '"Georgia", "Times New Roman", serif',
-                  letterSpacing: '0.1em',
-                  lineHeight: 0.95,
-                  textAlign: 'center',
-                  background: 'linear-gradient(180deg, rgba(180,140,0,0.5) 0%, transparent 70%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                  transform: 'scaleY(-0.22) translateY(-30px)',
-                  filter: 'blur(5px)',
-                  opacity: 0.35,
-                  marginTop: '-0.05em',
-                  pointerEvents: 'none',
-                }}>SOON</span>
-              </div>
+            {/* COMING */}
+            <div style={{ position: 'relative', zIndex: 1, animation: 'fadeSlideUp 0.7s ease-out 0.1s both' }}>
+              <span style={{
+                display: 'block',
+                fontSize: 'clamp(3.8rem, 10vw, 7.5rem)',
+                fontWeight: '900',
+                fontFamily: '"Georgia", "Times New Roman", serif',
+                letterSpacing: '0.12em',
+                lineHeight: 0.92,
+                textTransform: 'uppercase',
+                // Cracked molten stone: dark charred base, glowing hot cracks
+                background: 'linear-gradient(180deg, #fff8c0 0%, #ffcc00 8%, #ff8800 22%, #cc4400 42%, #8b2200 62%, #4a1000 80%, #1a0500 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                filter: `
+                  drop-shadow(0 0 8px rgba(255,120,0,0.9))
+                  drop-shadow(0 0 20px rgba(255,60,0,0.7))
+                  drop-shadow(0 0 45px rgba(200,30,0,0.5))
+                  drop-shadow(2px 4px 0 rgba(0,0,0,0.9))
+                  drop-shadow(4px 8px 0 rgba(0,0,0,0.7))
+                `,
+                animation: 'fireFlicker 2.3s ease-in-out infinite',
+              }}>COMING</span>
             </div>
+
+            {/* SOON — larger, more intense */}
+            <div style={{ position: 'relative', zIndex: 1, marginTop: '-0.05em', animation: 'fadeSlideUp 0.7s ease-out 0.25s both' }}>
+              <span style={{
+                display: 'block',
+                fontSize: 'clamp(5.5rem, 15vw, 11rem)',
+                fontWeight: '900',
+                fontFamily: '"Georgia", "Times New Roman", serif',
+                letterSpacing: '0.08em',
+                lineHeight: 0.92,
+                textTransform: 'uppercase',
+                // Hotter at the top — white/yellow core, deep red bottom
+                background: 'linear-gradient(180deg, #ffffff 0%, #fff5a0 5%, #ffcc00 15%, #ff8800 30%, #ff4400 50%, #bb2200 68%, #6a1000 85%, #1a0400 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                filter: `
+                  drop-shadow(0 0 12px rgba(255,140,0,1))
+                  drop-shadow(0 0 30px rgba(255,60,0,0.85))
+                  drop-shadow(0 0 65px rgba(180,20,0,0.6))
+                  drop-shadow(0 0 100px rgba(120,0,0,0.4))
+                  drop-shadow(3px 6px 0 rgba(0,0,0,0.95))
+                  drop-shadow(6px 12px 0 rgba(0,0,0,0.7))
+                `,
+                animation: 'fireFlicker 1.9s ease-in-out infinite 0.3s',
+              }}>SOON</span>
+            </div>
+
+            {/* Fire overlay canvas is drawn on top via z-index 30 */}
           </div>
 
           {/* Gold divider line */}
@@ -749,6 +1077,17 @@ export function Countdown() {
           8%   { opacity: 1; }
           35%  { opacity: 0.6; }
           100% { opacity: 0; }
+        }
+        @keyframes fireFlicker {
+          0%   { filter: drop-shadow(0 0 12px rgba(255,140,0,1)) drop-shadow(0 0 30px rgba(255,60,0,0.85)) drop-shadow(0 0 65px rgba(180,20,0,0.6)) drop-shadow(3px 6px 0 rgba(0,0,0,0.95)); }
+          25%  { filter: drop-shadow(0 0 18px rgba(255,160,0,1)) drop-shadow(0 0 45px rgba(255,80,0,0.9)) drop-shadow(0 0 90px rgba(200,30,0,0.7)) drop-shadow(3px 6px 0 rgba(0,0,0,0.95)); }
+          50%  { filter: drop-shadow(0 0 8px rgba(255,100,0,0.9)) drop-shadow(0 0 22px rgba(220,50,0,0.75)) drop-shadow(0 0 50px rgba(150,15,0,0.5)) drop-shadow(3px 6px 0 rgba(0,0,0,0.95)); }
+          75%  { filter: drop-shadow(0 0 20px rgba(255,180,0,1)) drop-shadow(0 0 50px rgba(255,90,0,0.9)) drop-shadow(0 0 100px rgba(210,35,0,0.65)) drop-shadow(3px 6px 0 rgba(0,0,0,0.95)); }
+          100% { filter: drop-shadow(0 0 12px rgba(255,140,0,1)) drop-shadow(0 0 30px rgba(255,60,0,0.85)) drop-shadow(0 0 65px rgba(180,20,0,0.6)) drop-shadow(3px 6px 0 rgba(0,0,0,0.95)); }
+        }
+        @keyframes firePulse {
+          0%,100% { opacity: 0.7; transform: scale(1); }
+          50%      { opacity: 1;   transform: scale(1.06); }
         }
         @keyframes screenShake {
           0%   { transform: translate(0,0) rotate(0deg); }
