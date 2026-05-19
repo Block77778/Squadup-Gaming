@@ -149,17 +149,6 @@ function createAudioEngine() {
     secG.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
     sec.start(now + 0.25); sec.stop(now + 1.3);
 
-    // ─── STAGE 6: Pressure ring — ear-ring shockwave (80ms) ───
-    const ringOsc = ctx.createOscillator(); const ringGain = ctx.createGain();
-    ringOsc.connect(ringGain); ringGain.connect(masterComp);
-    ringOsc.type = 'sine';
-    ringOsc.frequency.setValueAtTime(4200, now + 0.08);
-    ringOsc.frequency.exponentialRampToValueAtTime(800, now + 3.5);
-    ringGain.gain.setValueAtTime(0, now + 0.08);
-    ringGain.gain.linearRampToValueAtTime(0.22, now + 0.12);
-    ringGain.gain.exponentialRampToValueAtTime(0.001, now + 3.8);
-    ringOsc.start(now + 0.08); ringOsc.stop(now + 4.0);
-
     // ─── STAGE 7: Distant reverb tail (400ms) ───
     // That rolling thunder that carries across the map
     const tailLen = Math.floor(ctx.sampleRate * 3.0);
@@ -320,165 +309,145 @@ export function Countdown() {
     const W = canvas.width = window.innerWidth;
     const H = canvas.height = window.innerHeight;
     const c = canvas.getContext('2d')!;
-    const cx = W / 2, cy = H / 2;
+    const cx = W/2, cy = H/2;
     const t0 = performance.now();
+    const TOTAL = 4000;
 
-    // Debris particles
-    const debris = Array.from({ length: 280 }, (_, i) => {
-      const angle = Math.random() * Math.PI * 2;
-      const spd = Math.random() * 22 + 6;
-      const isHot = i < 120;
+    // Shockwave rings
+    const rings = [
+      { delay:0,   maxR: Math.max(W,H)*1.2, thick:32, rgba:'255,255,220' },
+      { delay:60,  maxR: Math.max(W,H)*1.0, thick:20, rgba:'255,140,0'   },
+      { delay:140, maxR: Math.max(W,H)*0.8, thick:12, rgba:'255,60,0'    },
+      { delay:260, maxR: Math.max(W,H)*0.55,thick:7,  rgba:'180,20,0'    },
+      { delay:420, maxR: Math.max(W,H)*0.35,thick:4,  rgba:'255,200,80'  },
+    ];
+
+    // Hot debris with trails
+    const debris = Array.from({ length: 320 }, (_, idx) => {
+      const a = Math.random() * Math.PI * 2;
+      const spd = Math.random() * 28 + 4;
       return {
         x: cx, y: cy,
-        vx: Math.cos(angle) * spd * (0.6 + Math.random() * 0.4),
-        vy: Math.sin(angle) * spd * (0.6 + Math.random() * 0.4) - Math.random() * 8,
-        size: isHot ? Math.random() * 5 + 1.5 : Math.random() * 3 + 0.5,
-        life: Math.random() * 0.4 + 0.6,
-        color: isHot
-          ? ['#fff','#ffee88','#ffaa00','#ff6600','#ff2200'][Math.floor(Math.random()*5)]
-          : ['#888','#666','#444','#333'][Math.floor(Math.random()*4)],
-        grav: Math.random() * 0.5 + 0.2,
+        vx: Math.cos(a)*spd, vy: Math.sin(a)*spd - Math.random()*10,
+        size: Math.random()*5+1, life: Math.random()*0.45+0.55,
+        hot: idx < 160,
+        color: idx < 80
+          ? ['#fff','#ffeeaa','#ffaa00','#ff6600'][Math.floor(Math.random()*4)]
+          : idx < 160
+          ? ['#ff4400','#ff2200','#cc1100'][Math.floor(Math.random()*3)]
+          : ['#555','#444','#333','#222'][Math.floor(Math.random()*4)],
+        grav: Math.random()*0.6+0.15,
         trail: [] as {x:number,y:number}[],
       };
     });
 
-    // Shockwave rings — 5 of them, different speeds/colors
-    const rings = [
-      { delay:0,   maxR: Math.max(W,H)*1.1, thick:28, r:'255,255,200' },
-      { delay:40,  maxR: Math.max(W,H)*0.95, thick:18, r:'255,160,0' },
-      { delay:100, maxR: Math.max(W,H)*0.78, thick:12, r:'255,80,0' },
-      { delay:200, maxR: Math.max(W,H)*0.55, thick:8,  r:'200,40,0' },
-      { delay:350, maxR: Math.max(W,H)*0.38, thick:5,  r:'255,220,100' },
-    ];
-
     // Smoke puffs
-    const smokes = Array.from({ length: 16 }, () => ({
-      x: cx + (Math.random()-0.5)*120,
-      y: cy + (Math.random()-0.5)*80,
-      vx: (Math.random()-0.5)*2.5,
-      vy: -(Math.random()*3+1.5),
-      r: Math.random()*60+30,
-      delay: Math.random()*400,
+    const smokes = Array.from({ length: 20 }, () => ({
+      x: cx+(Math.random()-0.5)*140, y: cy+(Math.random()-0.5)*90,
+      vx:(Math.random()-0.5)*2, vy:-(Math.random()*2.5+1),
+      r: Math.random()*70+35, delay: Math.random()*300,
     }));
 
-    const TOTAL = 5000;
-
+    let last = t0;
     function frame(now: number) {
       const el = now - t0;
-      const gt = el / TOTAL;
-      if (gt > 1) { document.body.removeChild(canvas); return; }
+      const gt = Math.min(el / TOTAL, 1);
+      const dt = Math.min((now-last)/16, 3); last = now;
 
-      c.clearRect(0, 0, W, H);
+      c.clearRect(0,0,W,H);
 
-      // ── Shockwaves ──
-      rings.forEach(ring => {
-        const rt = Math.max(0, (el - ring.delay) / (TOTAL * 0.4));
-        if (rt <= 0 || rt > 1) return;
-        const radius = rt * ring.maxR;
-        const alpha = Math.pow(1 - rt, 2.2);
-        const width = ring.thick * (1 - rt * 0.6);
-        c.beginPath();
-        c.arc(cx, cy, radius, 0, Math.PI*2);
-        c.strokeStyle = `rgba(${ring.r},${alpha.toFixed(3)})`;
-        c.lineWidth = width;
+      // shockwave rings
+      rings.forEach(rng => {
+        const rt = Math.max(0,(el-rng.delay)/(TOTAL*0.38));
+        if(rt<=0||rt>1) return;
+        const rad = rt*rng.maxR;
+        const alpha = Math.pow(1-rt, 2.0);
+        c.beginPath(); c.arc(cx,cy,rad,0,Math.PI*2);
+        c.strokeStyle = `rgba(${rng.rgba},${alpha.toFixed(3)})`;
+        c.lineWidth = rng.thick*(1-rt*0.65);
         c.stroke();
       });
 
-      // ── Central fireball — 3-phase: white → orange → red ──
-      if (el < 800) {
-        const ft = el / 800;
-        const alpha = Math.pow(1 - ft, 0.7);
-        const maxR = Math.min(W, H) * 0.55;
-        const r = (1 - Math.pow(ft, 0.35)) * maxR + 30;
-        const g = c.createRadialGradient(cx, cy, 0, cx, cy, r);
-        if (ft < 0.25) {
-          g.addColorStop(0, `rgba(255,255,255,${alpha.toFixed(3)})`);
-          g.addColorStop(0.25,`rgba(255,255,180,${alpha.toFixed(3)})`);
-          g.addColorStop(0.6, `rgba(255,160,0,${(alpha*0.8).toFixed(3)})`);
+      // Central fireball: white-hot core → orange → dark red
+      if(el < 900) {
+        const ft = el/900;
+        const alpha = Math.pow(1-ft, 0.6);
+        const maxR = Math.min(W,H)*0.52;
+        const r = (1-Math.pow(ft,0.3))*maxR + 25;
+        const g = c.createRadialGradient(cx,cy,0,cx,cy,r);
+        if(ft < 0.3) {
+          g.addColorStop(0,   `rgba(255,255,255,${alpha.toFixed(3)})`);
+          g.addColorStop(0.2, `rgba(255,255,160,${alpha.toFixed(3)})`);
+          g.addColorStop(0.5, `rgba(255,140,0,${(alpha*0.85).toFixed(3)})`);
           g.addColorStop(1,   'rgba(0,0,0,0)');
         } else {
-          g.addColorStop(0,   `rgba(255,220,80,${(alpha*0.9).toFixed(3)})`);
-          g.addColorStop(0.3, `rgba(255,100,0,${(alpha*0.8).toFixed(3)})`);
-          g.addColorStop(0.65,`rgba(180,20,0,${(alpha*0.5).toFixed(3)})`);
+          g.addColorStop(0,   `rgba(255,200,60,${(alpha*0.9).toFixed(3)})`);
+          g.addColorStop(0.35,`rgba(255,70,0,${(alpha*0.75).toFixed(3)})`);
+          g.addColorStop(0.7, `rgba(140,15,0,${(alpha*0.45).toFixed(3)})`);
           g.addColorStop(1,   'rgba(0,0,0,0)');
         }
-        c.fillStyle = g;
-        c.beginPath(); c.arc(cx, cy, r, 0, Math.PI*2); c.fill();
+        c.fillStyle=g; c.beginPath(); c.arc(cx,cy,r,0,Math.PI*2); c.fill();
       }
 
-      // ── Secondary explosion bloom (250ms) ──
-      if (el > 250 && el < 1200) {
-        const st = (el - 250) / 950;
-        const alpha = Math.pow(1 - st, 1.5);
-        const r = st * Math.min(W,H) * 0.38;
-        const g2 = c.createRadialGradient(cx, cy, 0, cx, cy, r);
-        g2.addColorStop(0,   `rgba(255,200,50,${alpha.toFixed(3)})`);
-        g2.addColorStop(0.4, `rgba(255,80,0,${(alpha*0.7).toFixed(3)})`);
-        g2.addColorStop(1,   'rgba(0,0,0,0)');
-        c.fillStyle = g2;
-        c.beginPath(); c.arc(cx, cy, r, 0, Math.PI*2); c.fill();
+      // Secondary gas bloom at 280ms
+      if(el>280 && el<1300) {
+        const st=(el-280)/1020;
+        const alpha=Math.pow(1-st,1.6);
+        const r=st*Math.min(W,H)*0.34;
+        const g2=c.createRadialGradient(cx,cy,0,cx,cy,r);
+        g2.addColorStop(0,  `rgba(255,180,40,${alpha.toFixed(3)})`);
+        g2.addColorStop(0.4,`rgba(255,60,0,${(alpha*0.65).toFixed(3)})`);
+        g2.addColorStop(1,  'rgba(0,0,0,0)');
+        c.fillStyle=g2; c.beginPath(); c.arc(cx,cy,r,0,Math.PI*2); c.fill();
       }
 
-      // ── Screen-edge vignette flash ──
-      if (el < 300) {
-        const vt = el / 300;
-        const va = (1 - vt) * 0.7;
-        const vg = c.createRadialGradient(cx, cy, Math.min(W,H)*0.3, cx, cy, Math.max(W,H)*0.9);
-        vg.addColorStop(0, 'rgba(0,0,0,0)');
-        vg.addColorStop(1, `rgba(255,80,0,${va.toFixed(3)})`);
-        c.fillStyle = vg; c.fillRect(0,0,W,H);
+      // Edge orange flash
+      if(el<350){
+        const vt=el/350, va=(1-vt)*0.75;
+        const vg=c.createRadialGradient(cx,cy,Math.min(W,H)*0.28,cx,cy,Math.max(W,H)*0.92);
+        vg.addColorStop(0,'rgba(0,0,0,0)');
+        vg.addColorStop(1,`rgba(255,60,0,${va.toFixed(3)})`);
+        c.fillStyle=vg; c.fillRect(0,0,W,H);
       }
 
-      // ── Smoke puffs ──
-      smokes.forEach(sm => {
-        const st = Math.max(0, (el - sm.delay) / 3000);
-        if (st <= 0 || st > 1) return;
-        const sr = sm.r * (1 + st * 3.5);
-        const sa = st < 0.1 ? st/0.1 * 0.18 : Math.pow(1-st, 2.5) * 0.18;
-        const sx = sm.x + sm.vx * st * 60;
-        const sy = sm.y + sm.vy * st * 60;
-        const grey = Math.floor(20 + st * 80);
-        c.globalAlpha = sa;
-        c.fillStyle = `rgb(${grey},${grey},${grey})`;
-        c.beginPath(); c.arc(sx, sy, sr, 0, Math.PI*2); c.fill();
-        c.globalAlpha = 1;
+      // Smoke
+      smokes.forEach(sm=>{
+        const st=Math.max(0,(el-sm.delay)/3500);
+        if(st<=0||st>1) return;
+        const sr=sm.r*(1+st*3);
+        const sa=st<0.1?st/0.1*0.16:Math.pow(1-st,2.8)*0.16;
+        const sx=sm.x+sm.vx*st*55, sy=sm.y+sm.vy*st*55;
+        const grey=Math.floor(15+st*70);
+        c.globalAlpha=sa;
+        c.fillStyle=`rgb(${grey},${grey},${grey})`;
+        c.beginPath(); c.arc(sx,sy,sr,0,Math.PI*2); c.fill();
+        c.globalAlpha=1;
       });
 
-      // ── Debris/embers ──
-      const dt16 = Math.min((now - (t0 + el - 16)) / 16, 3);
-      debris.forEach(d => {
-        const lt = gt / d.life;
-        if (lt > 1) return;
-        const alpha = Math.pow(1 - lt, 1.4);
-        d.x += d.vx * 0.016 * 60;
-        d.y += d.vy * 0.016 * 60;
-        d.vy += d.grav * 0.016 * 60 * 0.016;
-        d.vx *= 0.995;
-        d.trail.push({ x: d.x, y: d.y });
-        if (d.trail.length > 8) d.trail.shift();
-
-        // Streak trail
-        if (d.trail.length > 2) {
+      // Debris
+      debris.forEach(d=>{
+        const lt=gt/d.life; if(lt>1) return;
+        const alpha=Math.pow(1-lt,1.3);
+        d.x+=d.vx*dt*0.016*60; d.y+=d.vy*dt*0.016*60;
+        d.vy+=d.grav*dt*0.016*60*0.016; d.vx*=0.994;
+        d.trail.push({x:d.x,y:d.y});
+        if(d.trail.length>10) d.trail.shift();
+        if(d.trail.length>2){
           c.beginPath();
-          c.moveTo(d.trail[0].x, d.trail[0].y);
-          d.trail.forEach(p => c.lineTo(p.x, p.y));
-          c.strokeStyle = d.color;
-          c.globalAlpha = alpha * 0.35;
-          c.lineWidth = d.size * 0.5;
-          c.stroke();
-          c.globalAlpha = 1;
+          c.moveTo(d.trail[0].x,d.trail[0].y);
+          d.trail.forEach(p=>c.lineTo(p.x,p.y));
+          c.strokeStyle=d.color; c.globalAlpha=alpha*0.3;
+          c.lineWidth=d.size*0.5; c.stroke(); c.globalAlpha=1;
         }
-
-        // Core dot
-        c.globalAlpha = alpha;
-        c.fillStyle = d.color;
-        c.beginPath(); c.arc(d.x, d.y, d.size * (1 - lt * 0.5), 0, Math.PI*2); c.fill();
-        c.globalAlpha = 1;
+        c.globalAlpha=alpha;
+        c.fillStyle=d.color;
+        c.beginPath(); c.arc(d.x,d.y,d.size*(1-lt*0.45),0,Math.PI*2); c.fill();
+        c.globalAlpha=1;
       });
 
-      requestAnimationFrame(frame);
+      if(gt<1) requestAnimationFrame(frame);
+      else document.body.removeChild(canvas);
     }
-
     requestAnimationFrame(frame);
   };
 
@@ -747,21 +716,23 @@ export function Countdown() {
         }} />
       )}
 
-      {/* Fire canvas — always mounted, drawn on after explosion. z-index 40 = above text */}
+      {/* Fire canvas — z-index 10, behind text (z-20) but above bg */}
       <canvas
         ref={fireCanvasRef}
         className="absolute inset-0 pointer-events-none"
-        style={{ width: '100%', height: '100%', zIndex: 40 }}
+        style={{ width: '100%', height: '100%', zIndex: 10 }}
       />
 
-      {/* Dark smoky COD battlefield background */}
+      {/* Dark smoky COD background — matches reference image */}
       <div className="absolute inset-0" style={{
-        background: 'radial-gradient(ellipse at 50% 60%, rgba(80,25,0,0.9) 0%, rgba(30,8,0,1) 40%, rgba(5,2,0,1) 75%, #000 100%)',
+        background: 'radial-gradient(ellipse at 50% 55%, rgba(60,18,0,1) 0%, rgba(20,5,0,1) 45%, #000 80%)',
+        zIndex: 0,
       }} />
 
-      {/* Smoke/ember atmospheric haze */}
+      {/* Ember atmospheric depth layers */}
       <div className="absolute inset-0 pointer-events-none" style={{
-        background: 'radial-gradient(ellipse at 50% 80%, rgba(140,40,0,0.25) 0%, transparent 55%), radial-gradient(ellipse at 20% 40%, rgba(80,20,0,0.15) 0%, transparent 40%), radial-gradient(ellipse at 80% 30%, rgba(60,15,0,0.12) 0%, transparent 35%)',
+        background: 'radial-gradient(ellipse at 50% 85%, rgba(120,35,0,0.3) 0%, transparent 50%), radial-gradient(ellipse at 15% 50%, rgba(70,18,0,0.2) 0%, transparent 38%), radial-gradient(ellipse at 85% 40%, rgba(55,14,0,0.18) 0%, transparent 35%)',
+        zIndex: 1,
         animation: 'breatheFog 5s ease-in-out infinite',
       }} />
 
@@ -887,148 +858,122 @@ export function Countdown() {
       {/* === REVEALED PHASE === */}
       {revealed && (
         <div className="relative z-20 text-center flex flex-col items-center w-full" style={{
-          paddingTop: '1rem',
-          paddingBottom: '1rem',
-          overflowY: 'auto',
+          paddingTop: '2rem',
+          paddingBottom: '2rem',
           maxHeight: '100vh',
+          justifyContent: 'center',
         }}>
 
-          {/* Logo — shifted down slightly, smaller to avoid clipping */}
+          {/* Logo */}
           <div style={{
-            marginTop: '1.5rem',
-            marginBottom: '2rem',
-            animation: 'dropIn 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) both',
+            marginBottom: '1.5rem',
+            animation: 'dropIn 0.8s cubic-bezier(0.22, 1, 0.36, 1) both',
           }}>
-            <div style={{
-              filter: 'drop-shadow(0 0 50px rgba(218,165,32,0.8)) drop-shadow(0 0 100px rgba(218,165,32,0.4))',
-            }}>
-              <img
-                src="/squad-up-logo.png"
-                alt="Squad Up Gaming"
-                style={{
-                  height: '200px',
-                  objectFit: 'contain',
-                  animation: 'floatLogo 4s ease-in-out infinite',
-                }}
-              />
-            </div>
+            <img
+              src="/squad-up-logo.png"
+              alt="Squad Up Gaming"
+              style={{
+                height: '140px',
+                objectFit: 'contain',
+                filter: 'drop-shadow(0 0 30px rgba(255,140,0,0.9)) drop-shadow(0 0 80px rgba(255,60,0,0.5))',
+              }}
+            />
           </div>
 
-          {/* COMING SOON — fire-engulfed, cracked stone, matching the image */}
-          <div style={{ position: 'relative', lineHeight: 1, margin: '0 auto', textAlign: 'center' }}>
+          {/* COMING SOON — fire text matching reference image */}
+          <div style={{ position: 'relative', textAlign: 'center', lineHeight: 1 }}>
 
-            {/* Ambient fire glow behind text */}
+            {/* Fire glow bloom behind text */}
             <div style={{
-              position: 'absolute', inset: '-40px -60px',
-              background: 'radial-gradient(ellipse at 50% 70%, rgba(255,80,0,0.55) 0%, rgba(200,40,0,0.3) 35%, rgba(100,10,0,0.15) 60%, transparent 80%)',
-              filter: 'blur(18px)',
+              position: 'absolute',
+              top: '10%', left: '50%',
+              transform: 'translateX(-50%)',
+              width: '120%', height: '90%',
+              background: 'radial-gradient(ellipse at 50% 60%, rgba(255,80,0,0.7) 0%, rgba(180,30,0,0.4) 40%, transparent 70%)',
+              filter: 'blur(40px)',
               zIndex: 0,
-              animation: 'firePulse 1.8s ease-in-out infinite',
+              animation: 'firePulse 2s ease-in-out infinite',
+              pointerEvents: 'none',
             }} />
 
             {/* COMING */}
-            <div style={{ position: 'relative', zIndex: 1, animation: 'fadeSlideUp 0.7s ease-out 0.1s both' }}>
+            <div style={{ position: 'relative', zIndex: 1, animation: 'fadeSlideUp 0.6s ease-out 0.15s both' }}>
               <span style={{
                 display: 'block',
-                fontSize: 'clamp(3.8rem, 10vw, 7.5rem)',
+                fontSize: 'clamp(4rem, 11vw, 8rem)',
                 fontWeight: '900',
                 fontFamily: '"Georgia", "Times New Roman", serif',
-                letterSpacing: '0.12em',
-                lineHeight: 0.92,
-                textTransform: 'uppercase',
-                // Cracked molten stone: dark charred base, glowing hot cracks
-                background: 'linear-gradient(180deg, #fff8c0 0%, #ffcc00 8%, #ff8800 22%, #cc4400 42%, #8b2200 62%, #4a1000 80%, #1a0500 100%)',
+                letterSpacing: '0.13em',
+                lineHeight: 0.9,
+                background: 'linear-gradient(175deg, #ffffff 0%, #ffe566 10%, #ffaa00 28%, #ff5500 52%, #cc2200 72%, #6b1000 90%, #200500 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
-                filter: `
-                  drop-shadow(0 0 8px rgba(255,120,0,0.9))
-                  drop-shadow(0 0 20px rgba(255,60,0,0.7))
-                  drop-shadow(0 0 45px rgba(200,30,0,0.5))
-                  drop-shadow(2px 4px 0 rgba(0,0,0,0.9))
-                  drop-shadow(4px 8px 0 rgba(0,0,0,0.7))
-                `,
-                animation: 'fireFlicker 2.3s ease-in-out infinite',
+                filter: 'drop-shadow(0 0 10px rgba(255,100,0,1)) drop-shadow(0 0 28px rgba(255,50,0,0.8)) drop-shadow(0 0 60px rgba(180,20,0,0.55)) drop-shadow(3px 5px 0 rgba(0,0,0,1)) drop-shadow(6px 10px 0 rgba(0,0,0,0.6))',
+                animation: 'fireFlicker 2.1s ease-in-out infinite',
               }}>COMING</span>
             </div>
 
-            {/* SOON — larger, more intense */}
-            <div style={{ position: 'relative', zIndex: 1, marginTop: '-0.05em', animation: 'fadeSlideUp 0.7s ease-out 0.25s both' }}>
+            {/* SOON */}
+            <div style={{ position: 'relative', zIndex: 1, marginTop: '-0.04em', animation: 'fadeSlideUp 0.6s ease-out 0.3s both' }}>
               <span style={{
                 display: 'block',
-                fontSize: 'clamp(5.5rem, 15vw, 11rem)',
+                fontSize: 'clamp(6rem, 18vw, 13rem)',
                 fontWeight: '900',
                 fontFamily: '"Georgia", "Times New Roman", serif',
-                letterSpacing: '0.08em',
-                lineHeight: 0.92,
-                textTransform: 'uppercase',
-                // Hotter at the top — white/yellow core, deep red bottom
-                background: 'linear-gradient(180deg, #ffffff 0%, #fff5a0 5%, #ffcc00 15%, #ff8800 30%, #ff4400 50%, #bb2200 68%, #6a1000 85%, #1a0400 100%)',
+                letterSpacing: '0.06em',
+                lineHeight: 0.88,
+                background: 'linear-gradient(175deg, #ffffff 0%, #ffee88 6%, #ffbb00 18%, #ff6600 36%, #ff2200 55%, #aa1500 72%, #550800 88%, #150200 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
-                filter: `
-                  drop-shadow(0 0 12px rgba(255,140,0,1))
-                  drop-shadow(0 0 30px rgba(255,60,0,0.85))
-                  drop-shadow(0 0 65px rgba(180,20,0,0.6))
-                  drop-shadow(0 0 100px rgba(120,0,0,0.4))
-                  drop-shadow(3px 6px 0 rgba(0,0,0,0.95))
-                  drop-shadow(6px 12px 0 rgba(0,0,0,0.7))
-                `,
-                animation: 'fireFlicker 1.9s ease-in-out infinite 0.3s',
+                filter: 'drop-shadow(0 0 16px rgba(255,120,0,1)) drop-shadow(0 0 40px rgba(255,50,0,0.9)) drop-shadow(0 0 90px rgba(180,15,0,0.65)) drop-shadow(4px 8px 0 rgba(0,0,0,1)) drop-shadow(8px 16px 0 rgba(0,0,0,0.55))',
+                animation: 'fireFlicker 1.7s ease-in-out infinite 0.4s',
               }}>SOON</span>
             </div>
-
-            {/* Fire overlay canvas is drawn on top via z-index 30 */}
           </div>
 
-          {/* Gold divider line */}
+          {/* Divider */}
           <div style={{
-            width: '300px',
-            height: '2px',
-            margin: '1rem auto',
-            background: 'linear-gradient(90deg, transparent, #b8860b, #ffd700, #ffed4e, #ffd700, #b8860b, transparent)',
-            boxShadow: '0 0 20px rgba(218,165,32,0.8), 0 0 40px rgba(218,165,32,0.4)',
-            animation: 'fadeSlideUp 1s ease-out 0.5s both, linePulse 3s ease-in-out infinite',
+            width: '320px', height: '2px',
+            margin: '1.4rem auto 0.8rem',
+            background: 'linear-gradient(90deg, transparent, #ff6600, #ffaa00, #ffdd00, #ffaa00, #ff6600, transparent)',
+            boxShadow: '0 0 18px rgba(255,120,0,0.9), 0 0 40px rgba(255,60,0,0.5)',
+            animation: 'fadeSlideUp 0.8s ease-out 0.5s both',
           }} />
 
           {/* Tagline */}
           <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem',
-            animation: 'fadeSlideUp 1s ease-out 0.6s both',
-            marginBottom: '0.5rem',
+            display: 'flex', alignItems: 'center', gap: '0.9rem',
+            animation: 'fadeSlideUp 0.8s ease-out 0.65s both',
+            marginBottom: '0.4rem',
           }}>
-            <div style={{ width: '40px', height: '1px', background: 'linear-gradient(90deg, transparent, #ffd700)', opacity: 0.6 }} />
-            <span style={{ color: '#ffd700', fontSize: '1rem', opacity: 0.8 }}>◆</span>
+            <div style={{ width: '35px', height: '1px', background: 'linear-gradient(90deg, transparent, #ff8800)', opacity: 0.7 }} />
+            <span style={{ color: '#ff8800', fontSize: '0.9rem' }}>◆</span>
             <p style={{
-              color: '#c8a84b',
-              letterSpacing: '0.35em',
-              fontSize: 'clamp(0.6rem, 1.5vw, 0.85rem)',
+              color: '#ffaa44',
+              letterSpacing: '0.32em',
+              fontSize: 'clamp(0.6rem, 1.4vw, 0.82rem)',
               fontWeight: '700',
               textTransform: 'uppercase',
               fontFamily: 'Georgia, serif',
               margin: 0,
-            }}>
-              PREPARE FOR BATTLE
-            </p>
-            <span style={{ color: '#ffd700', fontSize: '1rem', opacity: 0.8 }}>◆</span>
-            <div style={{ width: '40px', height: '1px', background: 'linear-gradient(90deg, #ffd700, transparent)', opacity: 0.6 }} />
+              textShadow: '0 0 20px rgba(255,120,0,0.7)',
+            }}>PREPARE FOR BATTLE</p>
+            <span style={{ color: '#ff8800', fontSize: '0.9rem' }}>◆</span>
+            <div style={{ width: '35px', height: '1px', background: 'linear-gradient(90deg, #ff8800, transparent)', opacity: 0.7 }} />
           </div>
 
           <p style={{
-            color: '#5a4010',
-            letterSpacing: '0.5em',
-            fontSize: '0.65rem',
+            color: '#884422',
+            letterSpacing: '0.45em',
+            fontSize: '0.6rem',
             fontWeight: '700',
             textTransform: 'uppercase',
             fontFamily: 'Georgia, serif',
-            animation: 'fadeSlideUp 1s ease-out 0.8s both',
+            animation: 'fadeSlideUp 0.8s ease-out 0.8s both',
             margin: 0,
-          }}>
-            ELITE GAMING PLATFORM
-          </p>
+          }}>ELITE GAMING PLATFORM</p>
         </div>
       )}
 
@@ -1079,15 +1024,17 @@ export function Countdown() {
           100% { opacity: 0; }
         }
         @keyframes fireFlicker {
-          0%   { filter: drop-shadow(0 0 12px rgba(255,140,0,1)) drop-shadow(0 0 30px rgba(255,60,0,0.85)) drop-shadow(0 0 65px rgba(180,20,0,0.6)) drop-shadow(3px 6px 0 rgba(0,0,0,0.95)); }
-          25%  { filter: drop-shadow(0 0 18px rgba(255,160,0,1)) drop-shadow(0 0 45px rgba(255,80,0,0.9)) drop-shadow(0 0 90px rgba(200,30,0,0.7)) drop-shadow(3px 6px 0 rgba(0,0,0,0.95)); }
-          50%  { filter: drop-shadow(0 0 8px rgba(255,100,0,0.9)) drop-shadow(0 0 22px rgba(220,50,0,0.75)) drop-shadow(0 0 50px rgba(150,15,0,0.5)) drop-shadow(3px 6px 0 rgba(0,0,0,0.95)); }
-          75%  { filter: drop-shadow(0 0 20px rgba(255,180,0,1)) drop-shadow(0 0 50px rgba(255,90,0,0.9)) drop-shadow(0 0 100px rgba(210,35,0,0.65)) drop-shadow(3px 6px 0 rgba(0,0,0,0.95)); }
-          100% { filter: drop-shadow(0 0 12px rgba(255,140,0,1)) drop-shadow(0 0 30px rgba(255,60,0,0.85)) drop-shadow(0 0 65px rgba(180,20,0,0.6)) drop-shadow(3px 6px 0 rgba(0,0,0,0.95)); }
+          0%   { opacity: 1.0; }
+          20%  { opacity: 0.93; }
+          35%  { opacity: 1.0; }
+          50%  { opacity: 0.88; }
+          65%  { opacity: 1.0; }
+          80%  { opacity: 0.95; }
+          100% { opacity: 1.0; }
         }
         @keyframes firePulse {
-          0%,100% { opacity: 0.7; transform: scale(1); }
-          50%      { opacity: 1;   transform: scale(1.06); }
+          0%,100% { opacity: 0.75; transform: translateX(-50%) scaleX(1);   }
+          50%      { opacity: 1.0;  transform: translateX(-50%) scaleX(1.08); }
         }
         @keyframes screenShake {
           0%   { transform: translate(0,0) rotate(0deg); }
