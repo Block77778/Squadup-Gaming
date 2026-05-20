@@ -222,14 +222,13 @@ export function Countdown() {
     } else if (phase === 'holding') {
       if (count <= 0) {
         setFlash(true);
-        // Small delay so flash renders one frame, then fire explosion immediately
         setTimeout(() => {
-          setFlash(false);
           audioRef.current?.playExplosion();
           stopAmbientRef.current?.();
-          // triggerExplosion calls onComplete when smoke fully clears (~3.2s)
-          triggerExplosion(() => setRevealed(true));
-        }, 80);
+          triggerExplosion();
+          setRevealed(true);
+          setFlash(false);
+        }, 600);
         return;
       }
       timerRef.current = setTimeout(() => setPhase('exiting'), HOLD_MS);
@@ -243,177 +242,152 @@ export function Countdown() {
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [count, phase, started]);
 
-  const triggerExplosion = (onComplete: () => void) => {
+  const triggerExplosion = () => {
     const canvas = document.createElement('canvas');
     canvas.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;z-index:99999;pointer-events:none;';
     document.body.appendChild(canvas);
     const W = canvas.width = window.innerWidth;
     const H = canvas.height = window.innerHeight;
     const c = canvas.getContext('2d')!;
-    const cx = W / 2, cy = H / 2;
-    // Diagonal from center to corner — guarantees full screen coverage
-    const maxR = Math.sqrt(cx * cx + cy * cy) * 1.05;
+    const cx = W/2, cy = H/2;
     const t0 = performance.now();
-    const TOTAL = 2000;
-    let revealFired = false;
+    const TOTAL = 4000;
 
-    // ── Shockwave rings ──
+    // Shockwave rings
     const rings = [
-      { d: 0,   col: '255,255,255', w: 40, exp: 2.2 },
-      { d: 60,  col: '255,200,60',  w: 28, exp: 2.4 },
-      { d: 130, col: '255,100,0',   w: 18, exp: 2.6 },
-      { d: 220, col: '200,40,0',    w: 10, exp: 2.8 },
-      { d: 340, col: '255,180,80',  w: 5,  exp: 2.5 },
+      { delay:0,   maxR: Math.max(W,H)*1.2, thick:32, rgba:'255,255,220' },
+      { delay:60,  maxR: Math.max(W,H)*1.0, thick:20, rgba:'255,140,0'   },
+      { delay:140, maxR: Math.max(W,H)*0.8, thick:12, rgba:'255,60,0'    },
+      { delay:260, maxR: Math.max(W,H)*0.55,thick:7,  rgba:'180,20,0'    },
+      { delay:420, maxR: Math.max(W,H)*0.35,thick:4,  rgba:'255,200,80'  },
     ];
 
-    // ── Embers — all burst from center, fill the screen ──
-    const embers = Array.from({ length: 500 }, (_, i) => {
-      const a   = Math.random() * Math.PI * 2;
-      const spd = Math.random() * (maxR / TOTAL * 1000) * 1.4 + 8; // fast enough to reach edges
-      const t   = i < 120 ? 0 : i < 260 ? 1 : i < 380 ? 2 : 3;
+    // Hot debris with trails
+    const debris = Array.from({ length: 320 }, (_, idx) => {
+      const a = Math.random() * Math.PI * 2;
+      const spd = Math.random() * 28 + 4;
       return {
         x: cx, y: cy,
-        vx: Math.cos(a) * spd,
-        vy: Math.sin(a) * spd - Math.random() * 12,
-        sz: [Math.random()*6+2.5, Math.random()*4+1.5, Math.random()*2.5+0.8, Math.random()*1.5+0.4][t],
-        life: (0.55 + Math.random() * 0.45) * TOTAL,
-        col: [
-          ['#fff','#fff8cc','#ffee88'][Math.floor(Math.random()*3)],
-          ['#ffcc00','#ff9900','#ff6600'][Math.floor(Math.random()*3)],
-          ['#ff3300','#cc1100','#aa0800'][Math.floor(Math.random()*3)],
-          ['#777','#555','#333'][Math.floor(Math.random()*3)],
-        ][t],
-        grav: Math.random() * 0.4 + 0.08,
-        drag: 0.991 + Math.random() * 0.005,
+        vx: Math.cos(a)*spd, vy: Math.sin(a)*spd - Math.random()*10,
+        size: Math.random()*5+1, life: Math.random()*0.45+0.55,
+        hot: idx < 160,
+        color: idx < 80
+          ? ['#fff','#ffeeaa','#ffaa00','#ff6600'][Math.floor(Math.random()*4)]
+          : idx < 160
+          ? ['#ff4400','#ff2200','#cc1100'][Math.floor(Math.random()*3)]
+          : ['#555','#444','#333','#222'][Math.floor(Math.random()*4)],
+        grav: Math.random()*0.6+0.15,
         trail: [] as {x:number,y:number}[],
-        tLen: t < 2 ? 14 : 6,
-        glow: t < 2,
       };
     });
 
-    let last = t0;
+    // Smoke puffs
+    const smokes = Array.from({ length: 20 }, () => ({
+      x: cx+(Math.random()-0.5)*140, y: cy+(Math.random()-0.5)*90,
+      vx:(Math.random()-0.5)*2, vy:-(Math.random()*2.5+1),
+      r: Math.random()*70+35, delay: Math.random()*300,
+    }));
 
+    let last = t0;
     function frame(now: number) {
       const el = now - t0;
       const gt = Math.min(el / TOTAL, 1);
-      const dt = Math.min((now - last) / 16, 3);
-      last = now;
+      const dt = Math.min((now-last)/16, 3); last = now;
 
-      // Trigger reveal 200ms before canvas ends
-      if (!revealFired && el > TOTAL - 200) {
-        revealFired = true;
-        onComplete();
-      }
+      c.clearRect(0,0,W,H);
 
-      c.clearRect(0, 0, W, H);
-
-      // ── 1. FULL-SCREEN FIREBALL — expands to cover entire screen ──
-      // Phase A (0–350ms): blast expands white-hot, fills screen
-      // Phase B (350–1000ms): burns orange then fades to black
-      if (el < 1000) {
-        const ft = el / 1000;
-        // Radius grows from 0 → maxR * 1.1 then holds briefly
-        const r = ft < 0.35
-          ? (ft / 0.35) * maxR * 1.1          // rapid expansion to cover screen
-          : maxR * 1.1 * (1 - (ft - 0.35) * 0.3); // slight contraction as it burns out
-        const alpha = ft < 0.08 ? ft / 0.08   // quick ramp in
-                    : ft < 0.35 ? 1.0          // hold full during expansion
-                    : Math.pow(1 - (ft - 0.35) / 0.65, 0.7); // burn out
-
-        const g = c.createRadialGradient(cx, cy, 0, cx, cy, r);
-        if (ft < 0.15) {
-          // Pure white flash phase
-          g.addColorStop(0,    `rgba(255,255,255,${alpha.toFixed(3)})`);
-          g.addColorStop(0.5,  `rgba(255,240,180,${alpha.toFixed(3)})`);
-          g.addColorStop(0.85, `rgba(255,140,0,${(alpha*0.7).toFixed(3)})`);
-          g.addColorStop(1,    `rgba(200,40,0,${(alpha*0.3).toFixed(3)})`);
-        } else if (ft < 0.35) {
-          // Yellow-orange fill — covering screen
-          g.addColorStop(0,    `rgba(255,255,200,${alpha.toFixed(3)})`);
-          g.addColorStop(0.3,  `rgba(255,180,0,${alpha.toFixed(3)})`);
-          g.addColorStop(0.65, `rgba(255,80,0,${(alpha*0.85).toFixed(3)})`);
-          g.addColorStop(0.88, `rgba(180,20,0,${(alpha*0.55).toFixed(3)})`);
-          g.addColorStop(1,    `rgba(60,0,0,${(alpha*0.2).toFixed(3)})`);
-        } else {
-          // Deep orange-red burn contracting
-          g.addColorStop(0,    `rgba(255,160,0,${(alpha*0.9).toFixed(3)})`);
-          g.addColorStop(0.35, `rgba(255,60,0,${(alpha*0.75).toFixed(3)})`);
-          g.addColorStop(0.68, `rgba(140,10,0,${(alpha*0.45).toFixed(3)})`);
-          g.addColorStop(1,    'rgba(0,0,0,0)');
-        }
-        c.fillStyle = g;
-        c.fillRect(0, 0, W, H); // fill full screen, not just circle
-      }
-
-      // ── 2. SHOCKWAVE RINGS — large, expand across entire screen ──
+      // shockwave rings
       rings.forEach(rng => {
-        const rt = Math.max(0, (el - rng.d) / (TOTAL * 0.65));
-        if (rt <= 0 || rt > 1) return;
-        const rad   = rt * maxR * 1.15; // expand beyond screen edges
-        const alpha = Math.pow(1 - rt, rng.exp);
-        const lw    = rng.w * (1 - rt * 0.75);
-        c.beginPath(); c.arc(cx, cy, rad, 0, Math.PI * 2);
-        c.strokeStyle = `rgba(${rng.col},${alpha.toFixed(3)})`;
-        c.lineWidth = lw; c.stroke();
-        // Bright inner corona
-        c.strokeStyle = `rgba(255,255,255,${(alpha * 0.4).toFixed(3)})`;
-        c.lineWidth = lw * 0.2; c.stroke();
+        const rt = Math.max(0,(el-rng.delay)/(TOTAL*0.38));
+        if(rt<=0||rt>1) return;
+        const rad = rt*rng.maxR;
+        const alpha = Math.pow(1-rt, 2.0);
+        c.beginPath(); c.arc(cx,cy,rad,0,Math.PI*2);
+        c.strokeStyle = `rgba(${rng.rgba},${alpha.toFixed(3)})`;
+        c.lineWidth = rng.thick*(1-rt*0.65);
+        c.stroke();
       });
 
-      // ── 3. EMBERS ──
-      embers.forEach(d => {
-        if (el > d.life) return;
-        const lt    = el / d.life;
-        const alpha = Math.pow(1 - lt, 1.1);
-        d.x  += d.vx * dt;
-        d.y  += d.vy * dt;
-        d.vy += d.grav * dt;
-        d.vx *= Math.pow(d.drag, dt);
-        d.vy *= Math.pow(d.drag, dt);
-        d.trail.push({ x: d.x, y: d.y });
-        if (d.trail.length > d.tLen) d.trail.shift();
-
-        // Gradient trail
-        for (let i = 1; i < d.trail.length; i++) {
-          const ta = (i / d.trail.length) * alpha * 0.45;
-          c.beginPath();
-          c.moveTo(d.trail[i-1].x, d.trail[i-1].y);
-          c.lineTo(d.trail[i].x, d.trail[i].y);
-          c.strokeStyle = d.col;
-          c.globalAlpha = ta;
-          c.lineWidth   = d.sz * (i / d.trail.length) * 0.55;
-          c.stroke();
+      // Central fireball: white-hot core → orange → dark red
+      if(el < 900) {
+        const ft = el/900;
+        const alpha = Math.pow(1-ft, 0.6);
+        const maxR = Math.min(W,H)*0.52;
+        const r = (1-Math.pow(ft,0.3))*maxR + 25;
+        const g = c.createRadialGradient(cx,cy,0,cx,cy,r);
+        if(ft < 0.3) {
+          g.addColorStop(0,   `rgba(255,255,255,${alpha.toFixed(3)})`);
+          g.addColorStop(0.2, `rgba(255,255,160,${alpha.toFixed(3)})`);
+          g.addColorStop(0.5, `rgba(255,140,0,${(alpha*0.85).toFixed(3)})`);
+          g.addColorStop(1,   'rgba(0,0,0,0)');
+        } else {
+          g.addColorStop(0,   `rgba(255,200,60,${(alpha*0.9).toFixed(3)})`);
+          g.addColorStop(0.35,`rgba(255,70,0,${(alpha*0.75).toFixed(3)})`);
+          g.addColorStop(0.7, `rgba(140,15,0,${(alpha*0.45).toFixed(3)})`);
+          g.addColorStop(1,   'rgba(0,0,0,0)');
         }
-        c.globalAlpha = 1;
-
-        // Core
-        c.globalAlpha = alpha;
-        c.fillStyle   = d.col;
-        c.beginPath(); c.arc(d.x, d.y, d.sz * (1 - lt * 0.4), 0, Math.PI * 2); c.fill();
-
-        // Glow halo on hot embers
-        if (d.glow && d.sz > 2) {
-          const gg = c.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.sz * 5);
-          gg.addColorStop(0, `rgba(255,200,60,${(alpha * 0.35).toFixed(3)})`);
-          gg.addColorStop(1, 'rgba(0,0,0,0)');
-          c.fillStyle = gg;
-          c.beginPath(); c.arc(d.x, d.y, d.sz * 5, 0, Math.PI * 2); c.fill();
-        }
-        c.globalAlpha = 1;
-      });
-
-      // ── 4. FADE TO BLACK — rapid clean wipe so website reveals crisply ──
-      if (el > 1200) {
-        const bt = (el - 1200) / (TOTAL - 1200);
-        const ba = Math.pow(bt, 1.8);
-        c.fillStyle = `rgba(0,0,0,${ba.toFixed(3)})`;
-        c.fillRect(0, 0, W, H);
+        c.fillStyle=g; c.beginPath(); c.arc(cx,cy,r,0,Math.PI*2); c.fill();
       }
 
-      if (gt < 1) requestAnimationFrame(frame);
+      // Secondary gas bloom at 280ms
+      if(el>280 && el<1300) {
+        const st=(el-280)/1020;
+        const alpha=Math.pow(1-st,1.6);
+        const r=st*Math.min(W,H)*0.34;
+        const g2=c.createRadialGradient(cx,cy,0,cx,cy,r);
+        g2.addColorStop(0,  `rgba(255,180,40,${alpha.toFixed(3)})`);
+        g2.addColorStop(0.4,`rgba(255,60,0,${(alpha*0.65).toFixed(3)})`);
+        g2.addColorStop(1,  'rgba(0,0,0,0)');
+        c.fillStyle=g2; c.beginPath(); c.arc(cx,cy,r,0,Math.PI*2); c.fill();
+      }
+
+      // Edge orange flash
+      if(el<350){
+        const vt=el/350, va=(1-vt)*0.75;
+        const vg=c.createRadialGradient(cx,cy,Math.min(W,H)*0.28,cx,cy,Math.max(W,H)*0.92);
+        vg.addColorStop(0,'rgba(0,0,0,0)');
+        vg.addColorStop(1,`rgba(255,60,0,${va.toFixed(3)})`);
+        c.fillStyle=vg; c.fillRect(0,0,W,H);
+      }
+
+      // Smoke
+      smokes.forEach(sm=>{
+        const st=Math.max(0,(el-sm.delay)/3500);
+        if(st<=0||st>1) return;
+        const sr=sm.r*(1+st*3);
+        const sa=st<0.1?st/0.1*0.16:Math.pow(1-st,2.8)*0.16;
+        const sx=sm.x+sm.vx*st*55, sy=sm.y+sm.vy*st*55;
+        const grey=Math.floor(15+st*70);
+        c.globalAlpha=sa;
+        c.fillStyle=`rgb(${grey},${grey},${grey})`;
+        c.beginPath(); c.arc(sx,sy,sr,0,Math.PI*2); c.fill();
+        c.globalAlpha=1;
+      });
+
+      // Debris
+      debris.forEach(d=>{
+        const lt=gt/d.life; if(lt>1) return;
+        const alpha=Math.pow(1-lt,1.3);
+        d.x+=d.vx*dt*0.016*60; d.y+=d.vy*dt*0.016*60;
+        d.vy+=d.grav*dt*0.016*60*0.016; d.vx*=0.994;
+        d.trail.push({x:d.x,y:d.y});
+        if(d.trail.length>10) d.trail.shift();
+        if(d.trail.length>2){
+          c.beginPath();
+          c.moveTo(d.trail[0].x,d.trail[0].y);
+          d.trail.forEach(p=>c.lineTo(p.x,p.y));
+          c.strokeStyle=d.color; c.globalAlpha=alpha*0.3;
+          c.lineWidth=d.size*0.5; c.stroke(); c.globalAlpha=1;
+        }
+        c.globalAlpha=alpha;
+        c.fillStyle=d.color;
+        c.beginPath(); c.arc(d.x,d.y,d.size*(1-lt*0.45),0,Math.PI*2); c.fill();
+        c.globalAlpha=1;
+      });
+
+      if(gt<1) requestAnimationFrame(frame);
       else document.body.removeChild(canvas);
     }
-
     requestAnimationFrame(frame);
   };
 
