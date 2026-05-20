@@ -251,274 +251,164 @@ export function Countdown() {
     const H = canvas.height = window.innerHeight;
     const c = canvas.getContext('2d')!;
     const cx = W / 2, cy = H / 2;
+    // Diagonal from center to corner — guarantees full screen coverage
+    const maxR = Math.sqrt(cx * cx + cy * cy) * 1.05;
     const t0 = performance.now();
-
-    // ── Timing constants (ms) ──
-    const T_FLASH_END    =  180;   // white flash fades
-    const T_FIREBALL_END =  900;   // fireball burns out
-    const T_BLOOM_END    = 1400;   // secondary bloom gone
-    const T_RINGS_END    = 1800;   // last shockwave ring gone
-    const T_DEBRIS_END   = 2800;   // last ember fades
-    const T_SMOKE_PEAK   = 1200;   // smoke reaches max opacity
-    const T_SMOKE_END    = 3800;   // smoke fully clears → reveal
-    const T_TOTAL        = 3800;
+    const TOTAL = 2000;
+    let revealFired = false;
 
     // ── Shockwave rings ──
     const rings = [
-      { d:0,   maxR: Math.max(W,H)*1.25, w:36, col:'255,255,220', exp:1.9 },
-      { d:80,  maxR: Math.max(W,H)*1.05, w:22, col:'255,160,30',  exp:2.1 },
-      { d:180, maxR: Math.max(W,H)*0.82, w:13, col:'255,70,0',    exp:2.3 },
-      { d:320, maxR: Math.max(W,H)*0.58, w:8,  col:'200,30,0',    exp:2.5 },
-      { d:500, maxR: Math.max(W,H)*0.38, w:4,  col:'255,220,100', exp:2.2 },
+      { d: 0,   col: '255,255,255', w: 40, exp: 2.2 },
+      { d: 60,  col: '255,200,60',  w: 28, exp: 2.4 },
+      { d: 130, col: '255,100,0',   w: 18, exp: 2.6 },
+      { d: 220, col: '200,40,0',    w: 10, exp: 2.8 },
+      { d: 340, col: '255,180,80',  w: 5,  exp: 2.5 },
     ];
 
-    // ── Ground dust ring (shockwave hits floor) ──
-    const dustRing = { maxR: W * 0.7, h: 60 };
-
-    // ── Spark jets — directional streaks from center ──
-    const jets = Array.from({ length: 24 }, (_, i) => {
-      const angle = (i / 24) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
-      const len   = Math.random() * 260 + 80;
-      const spd   = Math.random() * 0.5 + 0.5;
-      return { angle, len, spd, w: Math.random() * 2.5 + 0.5,
-               color: ['#fff','#ffee99','#ffaa00','#ff6600'][Math.floor(Math.random()*4)] };
-    });
-
-    // ── Hot embers ──
-    const embers = Array.from({ length: 420 }, (_, i) => {
-      const a = Math.random() * Math.PI * 2;
-      const spd = Math.random() * 32 + 3;
-      const tier = i < 100 ? 0 : i < 220 ? 1 : i < 340 ? 2 : 3;
+    // ── Embers — all burst from center, fill the screen ──
+    const embers = Array.from({ length: 500 }, (_, i) => {
+      const a   = Math.random() * Math.PI * 2;
+      const spd = Math.random() * (maxR / TOTAL * 1000) * 1.4 + 8; // fast enough to reach edges
+      const t   = i < 120 ? 0 : i < 260 ? 1 : i < 380 ? 2 : 3;
       return {
         x: cx, y: cy,
-        vx: Math.cos(a) * spd * (0.5 + Math.random() * 0.5),
-        vy: Math.sin(a) * spd * (0.5 + Math.random() * 0.5) - Math.random() * 14,
-        size: [Math.random()*5+2, Math.random()*3.5+1, Math.random()*2+0.6, Math.random()*1.5+0.4][tier],
-        maxLife: (Math.random() * 0.4 + 0.6) * T_DEBRIS_END,
-        color: [
-          ['#fff','#fff8cc','#ffee88','#ffcc00'][Math.floor(Math.random()*4)],
-          ['#ffaa00','#ff8800','#ff6600','#ff4400'][Math.floor(Math.random()*4)],
-          ['#ff3300','#dd1100','#bb0800'][Math.floor(Math.random()*3)],
-          ['#666','#555','#444','#333'][Math.floor(Math.random()*4)],
-        ][tier],
-        grav: Math.random() * 0.55 + 0.1,
-        drag: Math.random() * 0.008 + 0.990,
+        vx: Math.cos(a) * spd,
+        vy: Math.sin(a) * spd - Math.random() * 12,
+        sz: [Math.random()*6+2.5, Math.random()*4+1.5, Math.random()*2.5+0.8, Math.random()*1.5+0.4][t],
+        life: (0.55 + Math.random() * 0.45) * TOTAL,
+        col: [
+          ['#fff','#fff8cc','#ffee88'][Math.floor(Math.random()*3)],
+          ['#ffcc00','#ff9900','#ff6600'][Math.floor(Math.random()*3)],
+          ['#ff3300','#cc1100','#aa0800'][Math.floor(Math.random()*3)],
+          ['#777','#555','#333'][Math.floor(Math.random()*3)],
+        ][t],
+        grav: Math.random() * 0.4 + 0.08,
+        drag: 0.991 + Math.random() * 0.005,
         trail: [] as {x:number,y:number}[],
-        trailLen: tier < 2 ? 12 : 5,
+        tLen: t < 2 ? 14 : 6,
+        glow: t < 2,
       };
     });
 
-    // ── Smoke clouds ──
-    const smokes = Array.from({ length: 38 }, (_, i) => ({
-      x: cx + (Math.random() - 0.5) * 200,
-      y: cy + (Math.random() - 0.5) * 120,
-      vx: (Math.random() - 0.5) * 1.8,
-      vy: -(Math.random() * 1.8 + 0.6),
-      r:  Math.random() * 100 + 50,
-      delay: Math.random() * 400,
-      maxAlpha: Math.random() * 0.22 + 0.12,
-      grey: Math.floor(Math.random() * 30 + 10),
-    }));
-
     let last = t0;
-    let revealFired = false;
 
     function frame(now: number) {
-      const el  = now - t0;
-      const gt  = Math.min(el / T_TOTAL, 1);
-      const dt  = Math.min((now - last) / 16, 3);
+      const el = now - t0;
+      const gt = Math.min(el / TOTAL, 1);
+      const dt = Math.min((now - last) / 16, 3);
       last = now;
 
-      // Fire reveal callback when smoke is gone
-      if (!revealFired && el >= T_SMOKE_END - 200) {
+      // Trigger reveal 200ms before canvas ends
+      if (!revealFired && el > TOTAL - 200) {
         revealFired = true;
         onComplete();
       }
 
       c.clearRect(0, 0, W, H);
 
-      // ── Initial white flash (0–180ms) ──
-      if (el < T_FLASH_END) {
-        const ft = el / T_FLASH_END;
-        c.fillStyle = `rgba(255,255,255,${(Math.pow(1-ft,1.5)*0.95).toFixed(3)})`;
-        c.fillRect(0, 0, W, H);
-      }
+      // ── 1. FULL-SCREEN FIREBALL — expands to cover entire screen ──
+      // Phase A (0–350ms): blast expands white-hot, fills screen
+      // Phase B (350–1000ms): burns orange then fades to black
+      if (el < 1000) {
+        const ft = el / 1000;
+        // Radius grows from 0 → maxR * 1.1 then holds briefly
+        const r = ft < 0.35
+          ? (ft / 0.35) * maxR * 1.1          // rapid expansion to cover screen
+          : maxR * 1.1 * (1 - (ft - 0.35) * 0.3); // slight contraction as it burns out
+        const alpha = ft < 0.08 ? ft / 0.08   // quick ramp in
+                    : ft < 0.35 ? 1.0          // hold full during expansion
+                    : Math.pow(1 - (ft - 0.35) / 0.65, 0.7); // burn out
 
-      // ── Edge vignette burn (0–500ms) ──
-      if (el < 500) {
-        const vt = el / 500;
-        const va = Math.pow(1 - vt, 1.8) * 0.8;
-        const vg = c.createRadialGradient(cx, cy, Math.min(W,H)*0.25, cx, cy, Math.max(W,H));
-        vg.addColorStop(0, 'rgba(0,0,0,0)');
-        vg.addColorStop(0.7, `rgba(255,80,0,${(va*0.4).toFixed(3)})`);
-        vg.addColorStop(1,   `rgba(255,30,0,${va.toFixed(3)})`);
-        c.fillStyle = vg; c.fillRect(0, 0, W, H);
-      }
-
-      // ── Ground dust ring ──
-      if (el > 50 && el < T_RINGS_END) {
-        const rt = Math.max(0, (el - 50) / (T_RINGS_END - 50));
-        const r  = rt * dustRing.maxR;
-        const a  = Math.pow(1 - rt, 2.5) * 0.35;
-        const h  = dustRing.h * (1 - rt * 0.6);
-        const g  = c.createRadialGradient(cx, cy + h, r * 0.3, cx, cy + h, r);
-        g.addColorStop(0, `rgba(200,120,30,${(a*0.6).toFixed(3)})`);
-        g.addColorStop(0.5, `rgba(150,80,20,${a.toFixed(3)})`);
-        g.addColorStop(1, 'rgba(0,0,0,0)');
+        const g = c.createRadialGradient(cx, cy, 0, cx, cy, r);
+        if (ft < 0.15) {
+          // Pure white flash phase
+          g.addColorStop(0,    `rgba(255,255,255,${alpha.toFixed(3)})`);
+          g.addColorStop(0.5,  `rgba(255,240,180,${alpha.toFixed(3)})`);
+          g.addColorStop(0.85, `rgba(255,140,0,${(alpha*0.7).toFixed(3)})`);
+          g.addColorStop(1,    `rgba(200,40,0,${(alpha*0.3).toFixed(3)})`);
+        } else if (ft < 0.35) {
+          // Yellow-orange fill — covering screen
+          g.addColorStop(0,    `rgba(255,255,200,${alpha.toFixed(3)})`);
+          g.addColorStop(0.3,  `rgba(255,180,0,${alpha.toFixed(3)})`);
+          g.addColorStop(0.65, `rgba(255,80,0,${(alpha*0.85).toFixed(3)})`);
+          g.addColorStop(0.88, `rgba(180,20,0,${(alpha*0.55).toFixed(3)})`);
+          g.addColorStop(1,    `rgba(60,0,0,${(alpha*0.2).toFixed(3)})`);
+        } else {
+          // Deep orange-red burn contracting
+          g.addColorStop(0,    `rgba(255,160,0,${(alpha*0.9).toFixed(3)})`);
+          g.addColorStop(0.35, `rgba(255,60,0,${(alpha*0.75).toFixed(3)})`);
+          g.addColorStop(0.68, `rgba(140,10,0,${(alpha*0.45).toFixed(3)})`);
+          g.addColorStop(1,    'rgba(0,0,0,0)');
+        }
         c.fillStyle = g;
-        c.beginPath(); c.ellipse(cx, cy + h, r, h * 0.55, 0, 0, Math.PI * 2); c.fill();
+        c.fillRect(0, 0, W, H); // fill full screen, not just circle
       }
 
-      // ── Shockwave rings ──
+      // ── 2. SHOCKWAVE RINGS — large, expand across entire screen ──
       rings.forEach(rng => {
-        const rt = Math.max(0, (el - rng.d) / (T_RINGS_END - rng.d));
+        const rt = Math.max(0, (el - rng.d) / (TOTAL * 0.65));
         if (rt <= 0 || rt > 1) return;
-        const rad   = rt * rng.maxR;
+        const rad   = rt * maxR * 1.15; // expand beyond screen edges
         const alpha = Math.pow(1 - rt, rng.exp);
-        const lw    = rng.w * (1 - rt * 0.7);
+        const lw    = rng.w * (1 - rt * 0.75);
         c.beginPath(); c.arc(cx, cy, rad, 0, Math.PI * 2);
         c.strokeStyle = `rgba(${rng.col},${alpha.toFixed(3)})`;
         c.lineWidth = lw; c.stroke();
-        // Inner bright edge
-        c.beginPath(); c.arc(cx, cy, rad * 0.97, 0, Math.PI * 2);
-        c.strokeStyle = `rgba(255,255,255,${(alpha * 0.35).toFixed(3)})`;
-        c.lineWidth = lw * 0.25; c.stroke();
+        // Bright inner corona
+        c.strokeStyle = `rgba(255,255,255,${(alpha * 0.4).toFixed(3)})`;
+        c.lineWidth = lw * 0.2; c.stroke();
       });
 
-      // ── Spark jets (0–600ms) ──
-      if (el < 600) {
-        const jt = el / 600;
-        jets.forEach(j => {
-          const progress = Math.min(jt / j.spd, 1);
-          const alpha    = Math.pow(1 - jt, 1.4);
-          const tipDist  = j.len * progress;
-          const tailDist = Math.max(0, tipDist - j.len * 0.35);
-          const tx = cx + Math.cos(j.angle) * tipDist;
-          const ty = cy + Math.sin(j.angle) * tipDist;
-          const rx = cx + Math.cos(j.angle) * tailDist;
-          const ry = cy + Math.sin(j.angle) * tailDist;
-          const grad = c.createLinearGradient(rx, ry, tx, ty);
-          grad.addColorStop(0, `rgba(255,255,255,0)`);
-          grad.addColorStop(0.4, `rgba(255,220,80,${(alpha*0.6).toFixed(3)})`);
-          grad.addColorStop(1, `rgba(255,255,255,${alpha.toFixed(3)})`);
-          c.beginPath(); c.moveTo(rx, ry); c.lineTo(tx, ty);
-          c.strokeStyle = grad; c.lineWidth = j.w * (1 - jt * 0.7);
-          c.stroke();
-          // Tip glow dot
-          if (progress < 0.95) {
-            c.beginPath(); c.arc(tx, ty, j.w * 2, 0, Math.PI * 2);
-            c.fillStyle = `rgba(255,255,200,${(alpha*0.8).toFixed(3)})`;
-            c.fill();
-          }
-        });
-      }
-
-      // ── Main fireball (0–900ms) ──
-      if (el < T_FIREBALL_END) {
-        const ft    = el / T_FIREBALL_END;
-        const alpha = Math.pow(1 - ft, 0.55);
-        const maxR  = Math.min(W, H) * 0.56;
-        const r     = (1 - Math.pow(ft, 0.28)) * maxR + 30;
-        // Lobe distortion — 6 overlapping offset gradients for organic shape
-        const lobes = [
-          { ox:0, oy:0, s:1.0 },
-          { ox: r*0.12, oy:-r*0.08, s:0.75 },
-          { ox:-r*0.10, oy:-r*0.12, s:0.68 },
-          { ox: r*0.08, oy: r*0.10, s:0.60 },
-          { ox:-r*0.14, oy: r*0.06, s:0.55 },
-          { ox: r*0.05, oy: r*0.14, s:0.48 },
-        ];
-        lobes.forEach(({ ox, oy, s }) => {
-          const lr = r * s;
-          const g  = c.createRadialGradient(cx+ox, cy+oy, 0, cx+ox, cy+oy, lr);
-          if (ft < 0.25) {
-            g.addColorStop(0,    `rgba(255,255,255,${(alpha*1.0).toFixed(3)})`);
-            g.addColorStop(0.15, `rgba(255,255,180,${(alpha*0.95).toFixed(3)})`);
-            g.addColorStop(0.35, `rgba(255,200,0,${(alpha*0.85).toFixed(3)})`);
-            g.addColorStop(0.6,  `rgba(255,100,0,${(alpha*0.65).toFixed(3)})`);
-            g.addColorStop(0.85, `rgba(180,20,0,${(alpha*0.35).toFixed(3)})`);
-            g.addColorStop(1,    'rgba(0,0,0,0)');
-          } else {
-            g.addColorStop(0,    `rgba(255,220,80,${(alpha*0.92).toFixed(3)})`);
-            g.addColorStop(0.25, `rgba(255,120,0,${(alpha*0.80).toFixed(3)})`);
-            g.addColorStop(0.55, `rgba(200,40,0,${(alpha*0.55).toFixed(3)})`);
-            g.addColorStop(0.82, `rgba(100,8,0,${(alpha*0.25).toFixed(3)})`);
-            g.addColorStop(1,    'rgba(0,0,0,0)');
-          }
-          c.fillStyle = g;
-          c.beginPath(); c.arc(cx+ox, cy+oy, lr, 0, Math.PI * 2); c.fill();
-        });
-      }
-
-      // ── Secondary bloom (200–1400ms) ──
-      if (el > 200 && el < T_BLOOM_END) {
-        const bt = (el - 200) / (T_BLOOM_END - 200);
-        const ba = Math.pow(1 - bt, 1.8);
-        const br = bt * Math.min(W, H) * 0.38;
-        const bg = c.createRadialGradient(cx, cy, 0, cx, cy, br);
-        bg.addColorStop(0,   `rgba(255,180,30,${(ba*0.75).toFixed(3)})`);
-        bg.addColorStop(0.5, `rgba(255,60,0,${(ba*0.45).toFixed(3)})`);
-        bg.addColorStop(1,   'rgba(0,0,0,0)');
-        c.fillStyle = bg; c.beginPath(); c.arc(cx, cy, br, 0, Math.PI * 2); c.fill();
-      }
-
-      // ── Smoke (appears 300ms, peaks 1200ms, clears 3800ms) ──
-      smokes.forEach(sm => {
-        const start = sm.delay;
-        if (el < start) return;
-        const age = el - start;
-        const smokeDur = T_SMOKE_END - start;
-        const st  = Math.min(age / smokeDur, 1);
-        const peak = (T_SMOKE_PEAK - start) / smokeDur;
-        const raw  = st < peak
-          ? (st / peak) * sm.maxAlpha
-          : sm.maxAlpha * Math.pow(1 - (st - peak) / (1 - peak), 1.6);
-        const sa = raw;
-        if (sa <= 0.002) return;
-        const sr = sm.r * (1 + st * 3.5);
-        const sx = sm.x + sm.vx * st * 80;
-        const sy = sm.y + sm.vy * st * 80;
-        const grey = sm.grey + Math.floor(st * 55);
-        c.globalAlpha = sa;
-        c.fillStyle = `rgb(${grey},${grey},${grey})`;
-        c.beginPath(); c.arc(sx, sy, sr, 0, Math.PI * 2); c.fill();
-        c.globalAlpha = 1;
-      });
-
-      // ── Embers ──
+      // ── 3. EMBERS ──
       embers.forEach(d => {
-        if (el > d.maxLife) return;
-        const lt    = el / d.maxLife;
-        const alpha = Math.pow(1 - lt, 1.2);
-        d.x  += d.vx * dt; d.y += d.vy * dt;
-        d.vy += d.grav * dt; d.vx *= Math.pow(d.drag, dt); d.vy *= Math.pow(d.drag, dt);
+        if (el > d.life) return;
+        const lt    = el / d.life;
+        const alpha = Math.pow(1 - lt, 1.1);
+        d.x  += d.vx * dt;
+        d.y  += d.vy * dt;
+        d.vy += d.grav * dt;
+        d.vx *= Math.pow(d.drag, dt);
+        d.vy *= Math.pow(d.drag, dt);
         d.trail.push({ x: d.x, y: d.y });
-        if (d.trail.length > d.trailLen) d.trail.shift();
-        // Trail
-        if (d.trail.length > 2) {
-          for (let i = 1; i < d.trail.length; i++) {
-            const ta = (i / d.trail.length) * alpha * 0.4;
-            c.beginPath();
-            c.moveTo(d.trail[i-1].x, d.trail[i-1].y);
-            c.lineTo(d.trail[i].x, d.trail[i].y);
-            c.strokeStyle = d.color; c.globalAlpha = ta;
-            c.lineWidth = d.size * (i / d.trail.length) * 0.6; c.stroke();
-          }
-          c.globalAlpha = 1;
+        if (d.trail.length > d.tLen) d.trail.shift();
+
+        // Gradient trail
+        for (let i = 1; i < d.trail.length; i++) {
+          const ta = (i / d.trail.length) * alpha * 0.45;
+          c.beginPath();
+          c.moveTo(d.trail[i-1].x, d.trail[i-1].y);
+          c.lineTo(d.trail[i].x, d.trail[i].y);
+          c.strokeStyle = d.col;
+          c.globalAlpha = ta;
+          c.lineWidth   = d.sz * (i / d.trail.length) * 0.55;
+          c.stroke();
         }
+        c.globalAlpha = 1;
+
         // Core
         c.globalAlpha = alpha;
-        c.fillStyle = d.color;
-        c.beginPath(); c.arc(d.x, d.y, d.size * (1 - lt * 0.5), 0, Math.PI * 2); c.fill();
-        // Hot glow on bright embers
-        if (d.size > 2) {
-          const gg = c.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.size * 4);
-          gg.addColorStop(0, `rgba(255,200,50,${(alpha*0.3).toFixed(3)})`);
+        c.fillStyle   = d.col;
+        c.beginPath(); c.arc(d.x, d.y, d.sz * (1 - lt * 0.4), 0, Math.PI * 2); c.fill();
+
+        // Glow halo on hot embers
+        if (d.glow && d.sz > 2) {
+          const gg = c.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.sz * 5);
+          gg.addColorStop(0, `rgba(255,200,60,${(alpha * 0.35).toFixed(3)})`);
           gg.addColorStop(1, 'rgba(0,0,0,0)');
-          c.fillStyle = gg; c.beginPath(); c.arc(d.x, d.y, d.size*4, 0, Math.PI*2); c.fill();
+          c.fillStyle = gg;
+          c.beginPath(); c.arc(d.x, d.y, d.sz * 5, 0, Math.PI * 2); c.fill();
         }
         c.globalAlpha = 1;
       });
+
+      // ── 4. FADE TO BLACK — rapid clean wipe so website reveals crisply ──
+      if (el > 1200) {
+        const bt = (el - 1200) / (TOTAL - 1200);
+        const ba = Math.pow(bt, 1.8);
+        c.fillStyle = `rgba(0,0,0,${ba.toFixed(3)})`;
+        c.fillRect(0, 0, W, H);
+      }
 
       if (gt < 1) requestAnimationFrame(frame);
       else document.body.removeChild(canvas);
