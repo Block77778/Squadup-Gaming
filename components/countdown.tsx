@@ -216,11 +216,18 @@ export function Countdown() {
 
     if (phase === 'entering') {
   console.log('playing tick', count, isUrgent, audioRef.current);
+  if (count <= 0) {
+    // Count reached 0 — fire explosion immediately, don't show 0 at all
+    audioRef.current?.playExplosion();
+    stopAmbientRef.current?.();
+    triggerExplosion(() => setRevealed(true));
+    return;
+  }
   audioRef.current?.playTick(isUrgent);
   timerRef.current = setTimeout(() => setPhase('holding'), ENTER_MS);
     } else if (phase === 'holding') {
       if (count <= 0) {
-        // Single trigger — canvas handles all visuals, no React flash overlay
+        // Fallback safety — should be caught in entering now
         audioRef.current?.playExplosion();
         stopAmbientRef.current?.();
         triggerExplosion(() => setRevealed(true));
@@ -550,7 +557,7 @@ export function Countdown() {
       )}
 
       {/* ── COUNTDOWN PHASE ── */}
-      {!revealed && started && (
+      {!revealed && started && count !== null && count > 0 && (
         <div className="relative flex flex-col items-center" style={{ zIndex: 10 }}>
 
           <div style={{
