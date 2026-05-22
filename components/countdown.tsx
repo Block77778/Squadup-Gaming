@@ -632,7 +632,7 @@ export function Countdown() {
           {/* Logo */}
           <div style={{ marginBottom: '2rem', animation: 'dropIn 0.9s cubic-bezier(0.22,1,0.36,1) both' }}>
             <img src="/squad-up-logo.png" alt="Squad Up Gaming" style={{
-              height: '120px',
+              height: '180px',
               objectFit: 'contain',
               filter: 'drop-shadow(0 0 30px rgba(218,165,32,0.7)) drop-shadow(0 0 70px rgba(180,120,0,0.3))',
             }} />
@@ -724,6 +724,22 @@ export function Countdown() {
             fontFamily: 'Georgia, serif',
             animation: 'fadeSlideUp 0.7s ease-out 0.75s both',
           }}>ELITE GAMING PLATFORM</span>
+
+          {/* Email */}
+          <a href="mailto:info@squadup-ent.com" style={{
+            marginTop: '1.8rem',
+            color: 'rgba(218,165,32,0.55)',
+            fontSize: 'clamp(0.65rem, 1.4vw, 0.8rem)',
+            letterSpacing: '0.18em',
+            fontFamily: 'Georgia, serif',
+            fontWeight: '400',
+            textDecoration: 'none',
+            animation: 'fadeSlideUp 0.7s ease-out 0.9s both',
+            transition: 'color 0.3s ease',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.color = 'rgba(218,165,32,0.95)')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'rgba(218,165,32,0.55)')}
+          >info@squadup-ent.com</a>
         </div>
       )}
 
